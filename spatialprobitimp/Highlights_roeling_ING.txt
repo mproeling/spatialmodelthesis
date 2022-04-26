@@ -1,0 +1,6 @@
+Highlights belonging to:
+Investigating residuals as a measure of surprise in 219.810 consumer credit applications
+
+Fraudulent consumer credit applications more often have unexpected responses
+Parameters trained on a non-fraud training set can help analyzing unbalanced datasets
+Analyses of residuals of credit application responses is useful in identifying fraud

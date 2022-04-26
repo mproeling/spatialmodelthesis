@@ -1,0 +1,1204 @@
+\documentclass{article}
+\usepackage{algorithmic}
+\usepackage{algorithm}
+\usepackage[algo2e]{algorithm2e}
+\usepackage{array}
+\usepackage{afterpage}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsrefs}
+\usepackage{authblk}
+\usepackage{cite}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{kpfonts}
+\usepackage{listings}
+\usepackage{lscape}
+\usepackage{mathtools}
+\usepackage{multicol}
+\usepackage{pgfplots}
+\usepackage{rotating}
+\usepackage{setspace}
+\usepackage{subcaption}
+\usepackage{titlesec}
+\usepackage{tikz}
+\usepackage{url}
+
+%\usepackage[printwatermark]{xwatermark}
+%\usepackage{xcolor}
+%\usepackage{lipsum}
+%\newwatermark[allpages,color=red!50,angle=45,scale=4,xpos=-25,ypos=25]{DRAFT}
+
+\usepackage[latin1]{inputenc}
+\def\bra{\langle}\def\ket{\rangle}
+\makeatletter
+\newcommand{\distas}[1]{\mathbin{\overset{#1}{\kern\z@\sim}}}%
+\newsavebox{\mybox}\newsavebox{\mysim}
+\newcommand{\distras}[1]{%
+	\savebox{\mybox}{\hbox{\kern3pt$\scriptstyle#1$\kern3pt}}%
+	\savebox{\mysim}{\hbox{$\sim$}}%
+	\mathbin{\overset{#1}{\kern\z@\resizebox{\wd\mybox}{\ht\mysim}{$\sim$}}}%
+}
+\newcommand{\beginsupplement}{%
+        \setcounter{table}{0}
+        \renewcommand{\thetable}{S\arabic{table}}%
+        \setcounter{figure}{0}
+        \renewcommand{\thefigure}{S\arabic{figure}}%
+}
+\makeatother
+
+\usetikzlibrary{shapes,arrows}
+\usetikzlibrary{arrows}
+\titleformat{\chapter}[display]
+{\normalfont}{\Large\scshape\chaptertitlename\\thechapter}{0pt}{\LARGE\bfseries}
+
+\begin{document}
+
+\title{Imputation of attributes in networked data using Bayesian Autocorrelation Regression Models}
+\author[12]{Mark Patrick Roeling \thanks{mark.roeling@stats.ox.ac.uk}}
+\author[1]{Geoff Nicholls}
+\affil[1]{Department of Statistics, University of Oxford, 24-29 St Giles' OX1 3LB, United Kingdom}
+\affil[2]{CDT in Cybersecurity, University of Oxford, United Kingdom}
+\date{\today}
+\maketitle
+	
+\newpage
+\begin{abstract}
+Network-model misspecification poses a challenge for parameter estimation. The problem is amplified by missing data, as there is imputation error feeding back into distorted parameter estimates and vis versa. The problem of model misspecification has been a focus of recent work in the literature for Bayesian statistical methods, and new misspecification-robust procedures have been developed, in particular the method of cutting feedback between model modules. % removed Plummer because author guidelines: they dont want references in the abstract
+In this paper we show how this helps in a misspecified probit network model for a binary vertex trait. This has an unobserved field of missing jointly normal latent variables coupled by the network. Where model misspecification is mild and the binary vertex traits are full observed, Bayesian imputation of the latent probit variables and network parameters is routine. However some fraction of the binary traits themselves may be missing. In settings with high levels of missing data Bayesian analysis can fail badly, giving poor prediction of missing data, and parameter estimates that differ substantially from estimates on the fully observed data: missingness alters our conclusions about basic network properties. However Bayesian inference with a cut model is robust to much higher levels of missingness. We illustrate the advantage of cut models on a fully observed data set of Facebook graduate students. We introduce missingness in gender and show that Bayesian inference with a cut model recovers the withheld gender data and full-data network parameters where straightforward Bayesian inference fails.
+\end{abstract}
+\doublespacing
+\newpage
+\section{Introduction}
+
+In the cyber domain, large volumes of networked data are being collected, where links (or: edges) can indicate friendship (eg. Facebook), following status (eg. Twitter), send and received emails, IP-traffic (eg. botnets), financial transactions, and geolocation variables such as zip-code or country codes. Understanding network structure and topology has received a lot of attention and is informative for numerous statistical procedures such as clustering \cites{blondel2008fast, holland1983stochastic}. Equally important is the analyses of network attributes (i.e., node covariates), to understand node characteristics and the coordinating role of network topology.
+
+One problem with automated or online data collection is the occurrence of missing data. It is well known, from analyses on independent cases, that missingness can bias estimates (\cites{little2019statistical, schafer2002missing}). Traditionally, imputation has focused on the prediction of missing values in relational datasets consisting of data from randomly selected individuals (eg. \cites{harel2007multiple, rezvan2015rise}). This has fed method-development for imputation of missing data from unlinked observations \cite{van2012flexible}. When observations are linked, neglecting missing data by complete cases analyses can augment the problem if missingness is linked to network structure, so that entire clusters drop out which can impact the entire network \cites{huisman2008treatment, hancock2007modeling}.
+
+Earlier meta-analyses \cite{dittrich2017bayesian} provided convincing evidence for homophily; the preference for associating with individuals with similar attributes. If network structure is linked to covariate values, this may help in estimating the attribute of a node surrounded by nodes who have data on that particular attribute. On the other hand, if the attribute values can be (partly) predicted from network edges, it is likely that the pattern of missing data is somehow affected by tie structure. Since there are usually more edges than nodes in a network, edges are at least equally likely to be incomplete. The problem of incomplete edge structures has been described as part of the boundary specification problem, arising when the researcher has to decide which actors are relevant to include and which edges do not contribute (reviewed in \cite{kossinets2006effects}). Other factors are non-response effects in the data collection procedure (resulting in unobserved parts of the network) and fixed-choice effects (occurring when network actors are asked to nominate a fixed number of friends). Because missingness in networks is often reflected in edge structure, previous studies focusing on missing data mainly presented methods to predict missing edges between actors \cites{koskinen2013bayesian, huisman2009imputation} and different strategies for (sub)network sampling \cites{delahaye2017analytic, hipp2015research}.
+
+We are motivated by problems in which the network is observable, and there is important missing (or misleading) data in node attributes and interested in model misspecification in families of parametric models for joint network and node attributes \cite{snijders2011statistical}. For Exponential Random Graph models (ERGMs; \cites{frank1986markov, wasserman1996logit, holland1981exponential}) studies have proposed adaptive sampling mechanisms to acquire accurate posterior distributions \cites{zimmermanimproving, koskinen2013bayesian, hancock2007modeling, gile2017analysis} under missing data. From these models, missing node attributes can be imputed. However, measuring the impact of misspecification, and treating it, is challenging due to the formal intractability of these models. Autocorrelation Regression Models (ARMs; \cites{ord1975estimation, smith2004bayesian, anselin2013spatial}) provide a straightforward landing site for new statistical methods. In addition, for the probit ARM models for binary node attributes,
+ which we consider below, there must always be fields of missing latent continuous variables.
+ Given these considerations, and the popularity of ARMs, we choose to illustrate misspecification-robust imputation using ARMs.
+
+In a Bayesian setting, where missing data is treated as a latent variable, to be estimated or integrated in a joint posterior distribution along with other parameters of the model, the presence of missing data does not usually impose additional modelling. The conditional distribution of the missing data is determined by the same observation model, model parameters and priors needed for the full-data analysis. We refer to imputation based on the joint posterior of the missing data and model parameters as a (standard) ``full Bayes'' analysis. In this paper we make two main points: where there is model misspecification, it may be the case that a two stage impute-and-fit approach may be prefered to full Bayes. Our second point is that the effect of model misspecification is reinforced where we have large network ``fields'' of coupled missing data. In this case the benefit of a two stage approach can be dramatic.
+
+The methods we apply come from the recent literature on Bayesian theory and methods for inference from misspecified models. We demonstrate the usefulness of ``cut models'' (\cites{plummer2015cuts, lunn2009combining}). Cut models are useful when the model is misspecified and we dont know the correct model, so we cannot immediately fix the problem by model elaboration (\cite{gelman2004parameterization}). Instead, we try to control the impact of the misspecification by cutting feedback from misspecified model elements.
+
+ In the following we define imputation with ARMs and explain how to carry out inference with a cut model. We compare the cut model approach to full Bayes in a misspecified setting,
+ illustrating the difference using a publicly available social network dataset that is fully observed, and in which we introduce missing data according to different scenario's (snowball/MAR and random/MCAR sampling). Finally, in order to give a simple benchmark for comparison, and underline the robustness of our methods for network data, we compare two naive clustering-based imputation methods (distance- and neighbour based).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Methods}
+\subsection{Data}
+Data were obtained via Dr. Tore Opsahl [\url{https://toreopsahl.com/datasets/#online_social_network}], who collected Facebook data from students at the University of California, Irvine, and was kind enough to share attribute data (gender and year of study) with us for this project. Data were available from 1899 persons (1118 females) who used the Facebook messenger application during 196 days covering the period from April to October 2004. The data included all users that sent or received at least one message during that period. These longitudinal data were collapsed into covariates; popularity (indegree + outdegree), the day somebody became active using the application, and the day a person reached 75\% of the friends in his/her total network. 549 persons received a message but did not respond, and 37 send a message but did not receive a response. A full description of the data is presented in \cite{panzarasa2009patterns}.
+
+All data were fully observed, so we introduced missingness by removing some values from the (for the moment) binary \textit{gender} data $y\in \{0,1\}^n$. The data were a $n \times (p+1)$ matrix $X$ with $n$ rows corresponding to the $n=1899$ people in the study, a column for the intercept, and $p=7$ columns corresponding to
+covariates (indegree, five year of study levels, and day active) chosen to inform gender.
+ A relationship network matrix $C$ was constructed in the following way. For $i,j\in\{1,...,n\}$ let $a_{i,j}$ denote the number of messages sent from $i$ to $j$ and let $C_{i,j}=\max(a_{i,j},a_{j,i})$ be the overall network weight for edge $\bra i,j\ket$.
+
+ In the model below, gender $y$ will be the response, with some missing values. We use an ARM to model the relationship between $y$ and the node covariates $X$ in the context of network structure evidenced by $C$.
+
+\subsection{Autocorrelation Regression Model}
+
+In the Bayesian ARM for completely observed data \cites{dittrich2017bayesian, lesage1997bayesian, lesage1999applied, lesage2011new, lesagepace2009}, we let $C$ be a general $n \times n$ matrix of network weights. Let $W_{i,j}=C_{i,j}/\sum_{k=1}^n C_{i,k}$ so that $W=[W_{i,j}]_{i=1,...,n}^{j=1,...,n}$ is a row-stochastic version of $C$. Let $X$ be an $n\times (p+1)$ design matrix of covariates with first column corresponding to the intercept, let $\beta\in R^{p+1}$ be a vector of regression coefficients, $I_n$ the $n\times n$ identity matrix, and $\epsilon\in R^n$ be a vector of $n$ independent network variation differences $\epsilon \distas {} N(0, I_n \sigma^2)$, with $\sigma=1$ a variance parameter which can be set equal one in the probit setting of interest. Finally, $\rho\in R$ is the network autocorrelation parameter measuring the network influence. This is positive if attribute values of connected actors tend to converge and negative if those values diverge \cites{dittrich2017bayesian, lesagepace2009}.
+
+	The canonical spatial autoregressive model for a real response $z\in R^n$ is
+	\begin{equation}
+	\label{eq:ARM1}
+	z = \rho W z + X \beta + \epsilon
+	\end{equation}
+	or equivalently
+	\begin{equation}
+	z = (I_n - \rho W )^{-1} X \beta + (I_n - \rho W)^{-1} \epsilon
+	\end{equation}
+%The expected attribute value $E(z)=(I_n - \rho W )^{-1} X \beta$ depends on $X\beta$ plus a linear combination of values taken by neighbouring observations scaled by the network parameter $\rho$.
+Let $A_\rho = I_n - \rho W $ and $|A_\rho|$ = $\det(A_\rho)$. The likelihood for $\beta$ and $\rho$ given fully observed $z$ is
+	\begin{equation}
+	\label{eq:bayesARM}
+		p(z | \beta, \rho) \propto | A_\rho | \ \exp
+		\big{(} -\frac{1}{2} (A_\rho z - X\beta)^T (A_\rho z - X\beta)\big{)}.
+	\end{equation}
+The log-determinant $\log(|A_\rho|)$ must be evaluated in order to infer $\rho$. This is non-trivial
+and we found some schemes were not numerically stable, albeit in rather extreme missingness cases.
+%After some experimentation we settled on approximation by second-order Taylor
+%polynomial, following \cite{lesagepace2009, pace1997quick}.
+Of the three $\log(|A_\rho|)$-estimators implemented with \cite{wilhelm2013estimating} (the grid method of Pace and Barry \cite{pace1997quick}, spline approximation using grid points, and a Chebyshev approximation \cite{pace2004chebyshev}) the grid method proved most reliable, though we had agreement in all but the most extreme cases.
+The grid method, although robust, can be slow, and would not be used if other faster methods give adequate estimates.
+
+\subsubsection{Bayesian Probit ARMs for binary data}
+ The probit-ARM models introduced below are parameter rich. In fact, the number of latent parameters is proportional
+ to the number of response observations. In addition we have missing data. In this setting some form of parameter
+ regularisation is needed. Bayesian network model inference
+ \cites{hepple1995bayesian2, lesage1997bayesian} is a coherent regularisation framework.
+ Bayesian implementations of ARM's (e.g. \cite{lesage1999applied}) use Markov Chain Monte Carlo (MCMC)
+ to summarise posterior distribution. In our setting maximum likelihood estimation can result in a downward bias of the network effect parameter $\rho$ when cases are strongly connected \cites{mizruchi2008effect, neuman2010structure}. A number of factors contribute to this bias \cite{smith2009estimation}; for example, a network effect can reduce the amount of information gained from each node.
+
+ In our data the response variables $y_i, i=1,...,n$ are binary. Several studies have applied logit or probit Bayesian ARMs to discrete covariate data with, respectively, a dichotomous or multinomial/ordinal outcome \cites{holloway2002bayesian, lesage2011new, wilhelm2013estimating}. In a probit ARM the binary response $y$ is modeled as a discretisation of an underlying
+continuous latent field $z$ \cite{albert1993bayesian}, itself following an ARM as above. The variance is fixed to unity so that the regression parameters
+$\beta$ are identifiable \cite{lesage1999applied}.
+%The Bernoulli distributed dichotomous $y$ values determine from which side of the truncated normal distribution is drawn; truncated at 0 to the right when $y = 0$ and truncated at 0 to the left if $y = 1$. This draw of $z$ (that is re-sampled in every MCMC step) replaces the 0 or 1 and is used in the subsequent regression model. Because $z$ is just an additional set of estimated parameters, the conditional posterior distribution for the model parameters $\beta$, $\rho$, and $z$ is a Bayesian regression with a continuous dependent variable. The use of $z$ allows us to simulate from the exact posterior distribution of $\beta$. This approach can also be used for data in which the dependent variable(s) are multinomial, by simulating a vector $z$ of truncated normal deviates with a dimension depending on the number of nominal categories.
+%Logit and probit modelling adds a layer of complexity since the latent variable $z$ is missing for every observation and is drawn depending on $y$ (0 or 1; negative or positive):
+For $i=1,...,n$ we model $y_i = \mathbb{I}_{z_i > 0} $, leaving us with parameters $z, \beta$ and $\rho$, data $y$ and a posterior distribution
+\begin{equation}
+\pi (z, \rho, \beta | y ) \propto \pi (\rho, \beta) p(z | \rho, \beta)\mathbb{I}_{z\in \mathcal{Z}_y},
+\label{eq:distribution}
+\end{equation}
+where
+\[
+\mathcal{Z}_y=\{z\in R^n: \mathbb{I} y_i = \mathbb{I} z_i > 0 \mbox{\ for each\ } i=1,...,n\}
+\]
+and $p(z | \rho, \beta)$ is given in Equation~\ref{eq:bayesARM}.
+%
+%All of the $z$'s are missing and updated from conditional normals. The conditional distributions of $\beta, \rho$ are identical to the normal model but the $y$ and $z$ are swapped; $z$ has to satisfy the condition
+%
+%\begin{equation}
+%z \distas{} N \bigg( (I_n - \rho W ) ^{-1} X \beta, [(I_n - \rho W) ^ \prime (I_n - \rho W)] ^{-1}  | * \bigg)
+%\end{equation}
+%
+%where condition $*$ is $y_i = \mathbb{I}_{z_i > 0}$ and $i \in I_n$.
+The prior for $z\in R^n$ is the ARM defined in Equation~\ref{eq:bayesARM}. This can alternatively be thought of as the observation model for the missing data $z$.
+We assume independent prior(s) for $\rho$ and $\beta$ with $\pi(\rho, \beta)=\pi_\rho(\rho)\pi_\beta(\beta)$.
+For the prior on $\rho\in [-1, 1]$ we take a meta-analytic value based on 183 estimates of $\rho$ \cite{dittrich2017bayesian} encountered in a wide variety of independent
+data sets. We summarise those data for $\rho$ via a normal distribution with mean $\mu_\rho=0.36$ and standard deviation $\sigma_\rho=0.19$ truncated
+to the interval $[-1,1]$.
+ Our priors for $\beta$ are independent near flat normal priors with large variance ($\sigma_\beta=10^{12}$), $\pi_\beta(\beta)=N(\beta; 0, \sigma_\beta^2I_{p+1})$.
+
+For completely observed data, functions fitting models of this kind are incorporated in the Spatial Econometrics Toolbox for Matlab. There are some associated R packages (listed by \cite{martinetti2016probitspatial}) such as \textit{sarprobit} \cite{wilhelm2013estimating}.
+
+\subsection{Bayesian inference for missing data}
+
+\subsubsection{Posterior predictive distribution for missing data}
+We now consider imputation of missing data in the vector of responses, $y$. In our case $y$ is a binary vector recording gender. In a Bayesian setting imputation of missing values is formally straightforward. The missing $y$-entries are unknown, and treated as parameters alongside $z, \beta$ and $\rho$. We outline this ``full Bayes'' approach in this section.
+Our point below will be that the full Bayes approach fails where there is model misspecification
+combined with large amounts of missing data. Indeed it is surprising any approach works in this setting.
+However, recent developments in Bayes methods for misspecified models, and in particular the use of ``cut models'' \cite{plummer2015cuts}, are robust tools for network model parameter inference and offer a way forward.
+
+We assume the following setting. Suppose we are given original data collectively $\tilde X=[y,X]$ which
+contains one column $y$ with some missing entries. Let $y=(y_{obs}, y_{mis})^T$ with $y_{obs}=(y_1,...,y_{n-q})^T$
+observed and $y_{mis}=(y_{n-q+1},...,y_{n})^T$ missing, so that there are $q\in \{1,...,n\}$ missing entries in all.
+It is convenient to sort data in rows so that the missing data are in the last $q$ rows.
+In order to impute $y_{mis}$ we treat the full observed matrix $X$ as a matrix of covariates and model the relation between
+$y$ and $X$ using the ARM given in Equation~\ref{eq:ARM1}.
+
+The posterior distribution conditions on the observed data only,
+\begin{equation}\label{eq:fbp}
+\pi (z, \rho, \beta | y_{obs} ) \propto \pi (\rho, \beta) p(z | \rho, \beta)\mathbb{I}_{z\in \mathcal{Z}_{y_{obs}}},
+\end{equation}
+where
+\[
+\mathcal{Z}_{y_{obs}}=\{z\in R^n: \mathbb{I} y_i = \mathbb{I}_{z_i > 0} \mbox{\ for each\ } i=1,...,n-q\},
+\]
+so that the sign condition on $z=(z_1,...,z_n)$ applies only to those $z_i$ matched with a $y_i$ that is actually observed.
+The $z$-values matched with unobserved $y$-values are informed through their neighbours in the ARM.
+The posterior predictive distribution for $y_{mis}$ is
+simulated by simulating $z|y_{obs}$ from the distribution above
+and setting $z_{mis}=(z_{n-q+1},...,z_n)$ and $y_{mis,i}=\mathbb{I}_{z_{mis,i}>0}$ for $i=1,...,q$.
+In terms of the posterior in Equation~\ref{eq:fbp}, the posterior predictive is
+\begin{equation}\label{eq:p1}
+P(Y_{mis,i}=1|y_{obs})=P(\mathbb{I}_{Z_{mis,i} > 0}=1|y_{obs})
+\end{equation}
+with
+\[
+P(\mathbb{I}_{Z_{mis,i} > 0}=1|y_{obs})=\int_{z: \mathbb{I}_{z_{mis,i} > 0}=1}\pi (z, \rho, \beta | y_{obs} )dz d\beta d\rho.
+\]
+We generate realisations from the marginal distribution $y_{mis}|y_{obs}$ by sampling the joint distribution
+$z,\rho,\beta \sim \pi(z, \rho, \beta | y_{obs} )$ and setting $y_{mis}=\mathbb{I}_{z_{mis}>0}$.
+	
+In Bayesian inference for an ARM without missing data, parameter estimates are informed by the whole dataset. When there is missing data
+the investigator has the opportunity to control the flow of information from the imputed data back to parameters, and this leads to cut models,
+where parameters are estimated without feedback from imputed missing data.
+In a full Bayes analysis with missing data, parameters and missing data are coupled, and modelling decisions for missing data impact parameter estimates.
+If there is no or little model misspecification, all the information available is reliable and the full Bayes approach is likely more effective compared to cut models.
+Where there is model misspecification, cut models may be far more reliable.
+
+\subsubsection{Posterior simulation and estimation for missing data}\label{sec:FBest}
+The full Bayes posterior $(z,\beta,\rho)\sim \pi (z, \rho, \beta | y_{obs} ) $
+is simulated using MCMC as outlined in Algorithm \ref{alg:estimation}.
+We run Algorithm~\ref{alg:estimation} to generate $(z^{(t),\beta^{(t)},\rho^{(t)}})_{t=1,...,T}$ distributed asymptotically in $T$ according to $\pi (z, \beta, \rho | y_{obs} )$.
+For $i\in \{q+1,...,n\}$ let
+\begin{equation}\label{eq:defy}
+y^{(t)}_i=\mathbb{I}_{z^{(t)}_i>0}.
+\end{equation}
+We estimate the missing data using the marginal posterior mode,
+\begin{equation}\label{eq:defyhat}
+\hat y_i=\mbox{mode}(\{y^{(t)}_i,\ {t=1,...T}\}).
+\end{equation}
+
+To ensure an accurate posterior for $\rho$, a burn-in period of $1000$ plus $T=25000$
+ sweeps (where a sweep is one pass over all variables, equal to
+ one loop of Algorithm~\ref{alg:estimation}) are used to simulate posterior distributions. The required number of sweeps
+ was determined by targeting an effective sample size (see Table \ref{tab:ESS}) in the thousands. %Trace plots can be inspected in Figure~\ref{TODO:MCMCPLOTS} and in the appendix. Have not stored the trace plots, will run those models again and create the plots to include with the revision
+
+We use a mixture of Metropolis Hastings ($\rho$) and Gibbs ($z$ and $\beta$) sampling \cites{dittrich2017bayesian, lesage1997bayesian}.
+This is straightforward, but some details of the $z$-simulation in Algorithm~\ref{alg:estimation} play a role in defining the cut model
+and it is helpful to be clear that $y_{mis}$ plays no role in the MCMC itself.
+
+\begin{algorithm}
+    \vspace*{0.1in}
+	MCMC targeting $\pi (z, \rho, \beta | y_{obs} )$ in Equation~\ref{eq:fbp}. \\[0.05in]
+
+    Suppose at step $t\in \{0,1,...,T-1\}$ the current state of the Markov chain is
+    $z^{(t)}=z,\beta^{(t)}=\beta$ and $\rho^{(t)}=\rho$. The state at step $t+1$ is determined in the following way.
+    One update will be one cycle through each element of $z,\beta$ and $\rho$.
+    \begin{enumerate}
+    \item Update $z|\beta,\rho,y_{obs}$: (A) For $i=1,...,n$ let $W_{i,:}$ denote the $i$'th row of $W$; (1) simulate a new $z$-value using
+    \[
+    z'_i\sim N(W_{i,:}z+X_{i,:}\beta,1|y_i = \mathbb{I}_{z'_i > 0})
+    \]
+    if $i\le n-q$ (note that $W_{i,i}=0$ so the mean does not depend on $z_i$) and
+    \[
+    z'_i\sim N(W_{i,:}z+X_{i,:}\beta,1)
+    \]
+    if $i>n-q$ and then (B) set $z_i\leftarrow z'_i$ (ie, before moving onto the next $i$). Denote by
+    $z'$ the updated $z$-vector.
+
+	\item Update $\beta|z',\rho,y_{obs}$: the conditional probability density of $\beta$ is normal, so simulate
+    \begin{align*}
+        \beta' &\sim N(\mu^*_\beta, \Sigma_{\beta}^*) \\
+    	\mu_\beta^* &= (X^T X + \Sigma_\beta^{-1})  (X^T A_\rho z' + \Sigma_\beta^{-1} \mu_\beta) \\
+    	\Sigma_\beta^* &= (X^T X + \Sigma_\beta^{-1}) ^ {-1} \\
+        A_\rho &= (I_n - \rho W)
+	\end{align*}
+	In our case $\mu_\beta=0$ and $\Sigma_\beta=\sigma^2_\beta I_{p+1}$ with large $\sigma^2_\beta$, so these distributions simplify.
+    Notice that $\mu_\beta^*$ is calculated using the new $z'$-values inherited from the $z$-update above.
+	Denote by $\beta'$ the updated $\beta$-vector.
+
+    \item $\rho$-update: the conditional density of $\rho$ depends on $\rho$ through $|A_\rho|$, so Gibbs sampling is infeasible.
+	%\begin{equation}
+	%p(\rho | \beta^\prime, z, y) \propto |A_\rho| exp \big{(} -\frac{1}{2} (A_\rho z - X\beta)^\prime (A_{\rho}z - X\beta)\big{)}
+	%\end{equation}
+    We use Metropolis Hastings with a simple random walk proposal
+	\begin{equation}
+	\tilde \rho = \rho + u R, \quad R \distas{} N(0,1)
+	\end{equation}
+	where $u$ is the tuning parameter, chosen by monitoring the acceptance rates for this step,
+    %$\rho$ is calculated with the grid method (Barry \& Pace, 1999: see Supplementary material) With acceptance probability.
+	and acceptance probability
+	\[	
+	\alpha(\tilde\rho|\rho)=\text{min} \left\{
+	\begin{array}{ll}
+	1, \frac{\pi_\rho(\tilde\rho)p(z' | \beta', \tilde\rho) }{\pi_\rho(\rho)p(z' | \beta', \rho) }
+	\end{array}
+	\right\}.
+	\]
+	With probability $\alpha$ set $\rho'=\rho$ and otherwise set $\rho'=\tilde\rho$.
+\end{enumerate}
+    The new state is $z^{(t+1)}=z',\beta^{(t+1)}=\beta'$ and $\rho^{(t+1)}=\rho'$.\\[0.1in]
+
+	\caption{Bayesian ARM parameter estimation}
+	\label{alg:estimation}
+\end{algorithm}
+
+
+
+%[ TODO - pasted from above - Although gender was extracted from the full data matrix to form $y$, $X$ does not contain gender now that we have $y$, so that the rows of $X$ can be split into $X_{obs}$, containing the covariate data of persons with observed $y$, and $X_{mis}$ containing the data for cases with a missing value in $y$.]
+
+%Now that we defined the parameter estimation procedure for completely observed data, we propose a procedure that uses the ARM parameters to estimate covariates for observations with missing data.
+
+
+%With missing data, full Bayesian modelling replaces the missing observations in $y$ by random values for the first iteration, and updates those values on every draw, modelling the joint distribution of the missing data and their parameters.
+%Suppose we have $q$ observations with $y_{mis}$, let $X$ be $[X_{obs}, X_{mis}]^\prime$ and let $y$ take as starting values
+%
+%\begin{equation}
+%y_{t=0} =
+%\begin{cases}
+%y_{obs} 						& \text{if}\ y_i \ne \text{missing} \\
+%N(mean(y_{obs}), sd(y_{obs})) 	& \text{otherwise}
+%\end{cases}
+%\end{equation}
+%
+%in the normal continuous case (drawing from a candidate distributions for starting values of $y$ depends the distribution of $y_{obs}$). We estimate $\hat{y}_{mis}$ with Equation \ref{eq:predictiony}, and update $y_{mis}$ with the newly drawn values.
+
+
+
+%\subsubsection{Estimation procedure}
+
+
+\subsubsection{Cut model} \label{sec:cm}
+%Equation \ref{eq:predictiony} declared how $\hat{y}_{mis}$ can be predicted.
+Cut models treat model misspecification by replacing full Bayesian inference (previous sections) with a form of multiple imputation.
+Suppose the entire ARM network model is misspecified. For example, suppose the value of $\rho$ is set to an incorrect value.
+Estimates for parameters such as
+$z_{obs}$, which are tightly constrained by their data, may be relatively robust to model misspecification.
+However, $z_{mis}$-values are not tied to data and will settle at values consistent with each other, and the miss-specified model.
+In a full Bayesian setting, these poorly located latent variables feedback to distort $z_{obs}$, $\beta$ and $\rho$ estimates.
+In a cut model, we cut interactions between poorly informed variables $z_{mis}$ and the core parameters $z_{obs}$, $\beta$ and $\rho$.
+We determine an imputation posterior distribution for the core parameters alone using otherwise standard Bayesian methods.
+We then use this imputation posterior distribution as ``data'' to estimate $z_{mis}$, again, using standard Bayesian methods.
+This means $z_{mis}$ are informed by more reliable $z_{obs}, \beta$ and $\rho$ values.
+
+Denote by $\pi_{cut}(z, \rho, \beta | y_{obs} )$ the full distribution determined by the cut model.
+This will have the form
+\begin{equation}\label{eq:fcp}
+\pi_{cut}(z, \rho, \beta | y_{obs} )=p_{cut,mis}(z_{mis}|z_{obs},\beta,\rho)\pi_{cut,obs}(z_{obs}, \rho, \beta | y_{obs} ),\qquad z\in \mathcal{Z}_{y_{obs}},
+\end{equation}
+where $z=(z_{obs}, z_{mis})$ as above, and the distributions on the right hand side are defined below. In cut model MCMC, Algorithm~\ref{alg:cut}, we use MCMC to simulate
+\[(z^{(t)}_{obs},\beta^{(t)},\rho^{(t)})\sim \pi_{cut,obs}(z_{obs}, \rho, \beta | y_{obs} )\]
+and then simulate
+\[
+z^{(t)}_{mis}\sim p_{cut,mis}(z^{(t)}_{mis}|z^{(t)}_{obs},\beta^{(t)},\rho^{(t)}),
+\]
+setting $z^{(t)}=(z^{(t)}_{obs},z^{(t)}_{mis})$, for $t=1,...,T$. Estimation of $\hat y_{mis,i}$ and further analysis is then
+unchanged from the full Bayes case in Section~\ref{sec:FBest}.
+
+%model plays
+%little part, but parameters such a $z_{mis}$
+%entries in the equation, $\beta$, and $\rho$ are updated in the parameter estimation procedure, but the parameter distributions are not influenced by the imputed values; the prediction of $\hat{y}_{mis}$ is isolated from the parameter estimation procedure (see Figure \ref{fig:impflow}). The latter design is known as a cut model \cite{plummer2015cuts} since there is no flow from the imputed data to model parameters; estimation of $\beta$ and $\rho$ depends on $y_{obs}$ / $z_{obs}$ but not $y_{mis}$ / $z_{mis}$ whereas in the full Bayes parameter estimation depended on all observations. Covariate data from $y_{mis}$ cases (defined earlier as $X_{mis}$) are merely used to calculate the predicted value for each missing case ($\hat{y}_{mis}$). Current Bayesian multiple imputation models in data with independent observations largely consist as cut models \cite{lee2016multiply, van2006fully}, where parameter estimation relies on the complete cases and ignores the covariate data from the missing cases.
+
+We now give details for $p_{cut,mis}(z_{mis}|z_{obs},\beta,\rho)$ and $\pi_{cut,obs}(z_{obs}, \rho, \beta | y_{obs} )$.
+Group the model elements according to the way they are linked to observed or missing data, dividing
+the ARM equations into blocks corresponding to connections between observed pairs of nodes, missing pairs of nodes, and missing and observed pairs of nodes.
+The $n\times n$ network weight matrix $W$ is given in terms of its blocks as
+	\begin{equation}
+	W=\begin{bmatrix}
+		W_{[obs,obs]} & W_{[obs,mis]}\\
+		W_{[mis,obs]} & W_{[mis,mis]}\\
+	\end{bmatrix}
+	\end{equation}
+	where the blocks have dimension
+	\begin{align*}
+	\dim{W}=\begin{bmatrix}
+		(n-q)\times(n-q) & (n-q)\times q\\
+		q \times (n-q) & q \times q \\	
+	\end{bmatrix}.
+	\end{align*}
+    Let $\mathbb{O}$ be an $(n-q)\times q$ matrix of zeros. Define a new cut matrix $W_{cut}$ by removing feedback from missing to observed,
+    \begin{equation}
+	W^{cut}=\begin{bmatrix}
+		W_{[obs,obs]} & \mathbb{O}\\
+		W_{[mis,obs]} & W_{[mis,mis]}\\
+	\end{bmatrix}
+	\end{equation}
+    We block covariates similarly. Let
+    \begin{multicols}{2}
+		\begin{align*}
+		\text{X =}
+		\begin{bmatrix}
+		X_{obs}\\
+		X_{mis}\\
+		\end{bmatrix}
+		\end{align*}
+
+		\begin{equation}
+		\text{with dimensions: }
+		\begin{bmatrix}
+		(n-q)\times p \\
+		q \times p \\
+		\end{bmatrix},
+		\end{equation}
+		
+	\end{multicols}	
+
+	Substituting $W^{cut}$ for $W$ in Equation~\ref{eq:ARM1} we have a new cut ARM,
+	\begin{flalign}
+	& z_{obs} = \rho  W_{[obs,obs]} z_{obs} + X_{obs} \beta + \epsilon_{obs} \label{eq:cutobs} \\
+	& z_{mis} = \rho W_{[mis,obs]} z_{obs} + \rho W_{[mis,mis]} z_{mis} + X_{mis} \beta + \epsilon_{mis} \label{eq:prediction1a}
+	\end{flalign}
+	where
+	$\beta = (\beta_1, ..., \beta_p)^T$, $\epsilon_{obs} \distas{} N(0, \sigma^2 I_{n-q})$ and $\epsilon_{mis} \distas{} N(0, \sigma^2 I_{q})$.
+The cut distribution for the missing data is determined from Equation~\ref{eq:distribution}.
+Let $V = [X_{mis}, \rho W_{[mis,obs]}]$ (so $V$ is a $q\times (n+1+p-q)$ matrix) and let $\theta = (\beta^T, z_{obs}^T)^T$ (a $(n+1+p-q)\times 1$ vector).
+Let $A^{(mis)}_\rho = I_q - \rho W_{[mis,mis]}$. The cut prediction distribution $p_{cut,mis}$ in Equation~\ref{eq:fcp} is
+\[
+p_{cut,mis}(z_{mis}|z_{obs},\beta,\rho) \propto | A^{mis}_\rho | \ \exp\big{(} -\frac{1}{2} (A^{mis}_\rho z_{obs} - V\theta)^T (A^{mis}_\rho z_{obs} - V\theta)\big{)}.
+\]
+The cut posterior distribution $\pi_{cut,obs}$ on the RHS of Equation~\ref{eq:fcp} is
+\[
+\pi_{cut}(z_{obs}, \rho, \beta | y_{obs} )\propto \pi (\rho, \beta) p_{cut,obs}(z_{obs} | \rho, \beta)\mathbb{I}_{z_{obs}\in Z_{y_{obs},obs}},
+\]
+where
+\[
+\mathcal{Z}_{y_{obs},obs}=\{z_{obs}\in R^{n-q}: \mathbb{I} y_i = \mathbb{I}_{z_i > 0} \mbox{\ for each\ } i=1,...,n-q\},
+\]
+and likelihood from Equation~\ref{eq:cutobs},
+\[
+p_{cut,obs}(z_{obs} | \rho, \beta) \propto | A^{obs}_\rho | \ \exp\big{(} -\frac{1}{2} (A^{obs}_\rho z_{obs} - X_{obs}\beta)^T (A^{obs}_\rho z_{obs} - X_{obs}\beta)\big{)},
+\]
+where now $A^{obs}_\rho = I_{n-q} - \rho W_{[obs,obs]}$.
+
+\begin{algorithm}
+    \vspace*{0.1in}
+	MCMC targeting $\pi_{cut}(z, \rho, \beta | y_{obs} )$ in Equation~\ref{eq:fcp}. \\[0.05in]
+
+    Suppose at step $t\in \{0,1,...,T-1\}$ the current state of the Markov chain is
+    $z^{(t)}_{obs}=z_{obs},z^{(t)}_{mis}=z_{mis},\beta^{(t)}=\beta$ and $\rho^{(t)}=\rho$. The state at step $t+1$ is determined in the following way.
+    One update will be one cycle through each element of $z,\beta$ and $\rho$.
+    \begin{enumerate}
+    \item Update $z_{obs}|\beta,\rho,y_{obs}$: (A) For $i=1,...,n-q$ let $W^{cut}_{i,:}$ denote the $i$'th row of $W^{cut}$; (A) simulate a new $z$-value using
+    \[
+    z'_{obs,i}\sim N(W^{cut}_{i,:}z_{obs}+X_{obs,i,:}\beta,1|y_{obs,i} = \mathbb{I}_{z'_{obs,i} > 0}).
+    \]
+    and then (B) set $z_{obs,i}\leftarrow z'_{obs,i}$ (ie, before moving onto the next $i$). Denote by
+    $z'_{obs}$ the updated $z$-vector.
+
+	\item Update $\beta|z'_{obs},\rho,y_{obs}$: simulate
+    \begin{align*}
+        \beta' &\sim N(\mu^*_\beta, \Sigma_{\beta}^*) \\
+    	\mu_\beta^* &= (X_{obs}^T X_{obs} + \Sigma_\beta^{-1})  (X_{obs}^T A^{obs}_\rho z'_{obs} + \Sigma_\beta^{-1} \mu_\beta) \\
+    	\Sigma_\beta^* &= (X_{obs}^T X_{obs} + \Sigma_\beta^{-1}) ^ {-1} \\
+        A_\rho &= (I_{n-q} - \rho W_{[obs,obs]})
+	\end{align*}
+	Denote by $\beta'$ the updated $\beta$-vector.
+
+    \item $\rho$-update:
+	%\begin{equation}
+	%p(\rho | \beta^\prime, z, y) \propto |A_\rho| exp \big{(} -\frac{1}{2} (A_\rho z - X\beta)^\prime (A_{\rho}z - X\beta)\big{)}
+	%\end{equation}
+    We use Metropolis Hastings with a simple random walk proposal
+	\begin{equation}
+	\tilde \rho = \rho + u R, \quad R \distas{} N(0,1)
+	\end{equation}
+	where $u$ is the tuning parameter, chosen by monitoring the acceptance rates for this step,
+    %$\rho$ is calculated with the grid method (Barry \& Pace, 1999: see Supplementary material) With acceptance probability.
+	and acceptance probability
+	\[	
+	\alpha(\tilde\rho|\rho)=\text{min} \left\{
+	\begin{array}{ll}
+	1, \frac{\pi_\rho(\tilde\rho)p_{cut}(z'_{obs} | \beta', \tilde\rho) }{\pi_\rho(\rho)p_{cut}(z'_{obs} | \beta', \rho) }
+	\end{array}
+	\right\}.
+	\]
+	With probability $\alpha$ set $\rho'=\rho$ and otherwise set $\rho'=\tilde\rho$.
+\end{enumerate}
+    The new state is $z^{(t+1)}_{obs}=z'_{obs},\beta^{(t+1)}=\beta'$ and $\rho^{(t+1)}=\rho'$.
+    \begin{enumerate}\setcounter{enumi}{3}
+    \item Update $z_{mis}|z^{(t+1)}_{obs}\beta^{(t+1)},\rho^{(t+1)}$: Simulate $\epsilon^{(t+1)}_{mis} \distas{} N(0, \sigma^2 I_{q})$ and set
+    \[
+    z^{(t+1)}_{mis} \leftarrow \rho W_{[mis,obs]} z^{(t+1)}_{obs} + \rho^{(t+1)} W_{[mis,mis]} z^{(t)}_{mis} + X_{mis} \beta^{(t+1)} + \epsilon^{(t+1)}_{mis} \label{eq:prediction1c}
+    \]
+    Note that since Steps 1-3 do not depend on $z^{(t)}_{mis}$, step 4 can be implemented in post-processing on the MCMC-output chain.
+    \end{enumerate}
+	\caption{Cut model ARM parameter estimation}
+	\label{alg:cut}
+\end{algorithm}
+
+
+    %It follows that
+%	\begin{flalign}
+%	\label{eq:prediction2}
+%		&z_{mis} = \rho W_{[mis,mis]} z_{mis} + [X_{mis} \beta + \rho W_{[mis,obs]} z_{obs}] + \epsilon \nonumber \\
+%		&\ \ \ \ \ \ \ = \rho W_{[mis,mis]} z_{mis} + V \theta + \epsilon
+%	\end{flalign}
+%	Where $V = [X_{mis}, \rho  W_{[mis,obs]}]$ and $\theta = (\beta^\prime, z_{obs}^\prime)$. Conditional on $\theta$ and $\rho$, all entries in $\theta$ and $V$ are known and $z_{mis}$ can be predicted using the ARM
+%	%\begin{equation}
+%	%	z_{mis} = \rho W_{[mis,mis]} z_{mis} + V \theta + \epsilon
+%	%\end{equation}
+%	%which is equal to
+%	\begin{equation}
+%	\label{eq:predictiony}
+%		z_{mis} = (I_q - \rho W_{[mis,mis]})^{-1} V \theta + (I_q - \rho W_{[mis,mis]})^{-1} \epsilon
+%	\end{equation}
+
+%Simulation of $z|y_{obs}$ is carried out using a Gibbs sampler.
+%Here $z_{obs}$ is sampled according to \cite{wilhelm2013estimating} from a multivariate normal conditioned on its sign,
+%as $y_i=\mathbb{I}_{z_{obs,i}>0}$ for $i=1,...,n-q$ with $y_i$ fixed, and $z_{mis}$ is sampled from an unconditioned multivariate normal,
+%as $y_{mis}$ is unknown. Given $z_{mis}$, the imputed value is $y_{mis,i}=\mathbb{I}_{z_{mis,i}>0}$ for $i=1,...,q$
+%so that the sign determines the imputed value.
+
+
+
+
+%\begin{figure}[ht]
+%	\caption{Flowchart of the cut model imputation procedure}	
+%	% Define block styles
+%	\tikzstyle{block} = [rectangle, draw, fill=blue!20,
+%	text width=10em, text centered, rounded corners, minimum height=2em]
+%	\tikzstyle{line} = [draw, -latex']
+%			
+%	\begin{tikzpicture}[node distance = 2cm, auto]
+%		
+%	% Place nodes
+%	\node [block] (init) {$y_{obs}$: observed data};
+%	\node [block, right of=init, node distance=7cm] (update) {$\beta, \rho | y_{obs} \distas{} MCMC$};
+%	\node [block, below of=update] (impute) {$\hat{y}_{mis} | \beta, \rho$};
+%	\node [block, left of=impute,  node distance=7cm] (handleY) {$\hat{y}_{mis}$: missing data};
+%		
+%	% Draw edges
+%	\path [line] (init) |- (update);	
+%	\path [line] (update) -- (impute);
+%	\path [line] (impute) -- (handleY);
+%	\path [line] (impute) -- node [text width=1.1cm,midway,above] {Eq. 12} (handleY);
+%	\end{tikzpicture}
+%	\label{fig:impflow}
+%\end{figure}
+
+Cut models may be helpful with high missingness as even slight model miss-specification can bias full Bayes estimates badly. Cut models can be characterised as Bayesian multiple imputation. Multiple imputation has two stages, an imputation stage, in which multiple copies of the missing data are imputed, followed by an analysis stage, in which in which a model is fit to the imputed and observed data and parameters estimated. In our setting there is some flexibility in what we identify as missing data, and what we call a parameter. We use this flexibility to get robustness to model misspecification. Recall that $y_{obs}$ is the observed data and $\beta,\rho,z_{obs}$, and $z_{mis}$ and $y_{mis}$, are all unknown. Algorithm~\ref{alg:cut} does multiple imputation of ``missing data''
+$\beta,\rho,z_{obs}$ followed by estimation of the parameters $z_{mis}$ and $y_{mis}$. When there is no model misspecification this cut model is consistent for $\beta$ and $\rho$ estimation, like full Bayes. However in that (well-specified) case, cut models tend to give estimates with less precision, as (desirable) information spread through the network via missing data is lost.
+%However, there are multiple reasons why cut models can be inefficient in networks. First, they provide parameter estimates based on complete cases only, ignoring a proportion of the data which is suboptimal. Second, ARMs capture network structure in ($\rho, W$). Complete case analyses means that persons with missing $y$ are dropped from the parameter estimation procedure, potentially resulting in a biased $\rho$ and $\hat{y}$, especially in the scenario where multiple covariates with missing data are imputed sequentially.
+
+\subsubsection{Experiments} \label{sec:experiments}
+
+From the original fully observed attribute data we created two types of missing data scenario's: Missing Completely at Random (MCAR) and Missing at Random (MAR). In MCAR,
+the missingness property is unrelated to the missing value itself or other attribute data. In the MAR data, the probability of being missing is the same only within groups defined by the observed data. On a network, missingness may be correlated by the network in the same way as any other node attribute.
+If there is a network effect on gender, there is may well be a network effect on missing gender.
+
+In our experiments, four scenarios with $10\%$, $25\%$, $50\%$ and $75\%$ missing gender values (this is $q=190,475,950,1424$ missing node gender values out of $n=1899$ in all) were created and compared with a baseline analysis of the fully observed data. For the MCAR setting, the individuals selected for imputation were randomly selected with the \textit{sample} function in R. To mimic MAR, snowball sampling was used. We chose the percentage missing node values in the snowball-sampling so that the number of ``informative edges'' in the snowball sampling matched the number of informative edges in the corresponding random/MCAR sampling. An edge is ``informative'' if both the two gender node-values adjacent the edge are not missing data. We refer to non-informative edges as ``missing''.
+We used the number of missing edges as a rough measure of the amount of network information in the data. Operationally, we select $m$ seed nodes and their direct neighbours (using \textit{LSMI} from the \textit{snowball} R-package) and remove their gender data. The number of nodes $q$ removed in our MAR setup was determined by removing data at seed nodes and their neighbours until the target number of missing edges was reached. A smaller number of snowball-sampled nodes gives the same number of missing edges as a larger number of random/MCAR nodes (see Table~\ref{tab:edgecomparison}). For example, removing data on $75\%$ of nodes chosen completely at random gives the same number of missing edges as removing data on $37.8\%$ of nodes chosen by snowball sampling (in one realisation of the missing-data snowball process). For further discussion of the Snowball/MAR missing-data process see Section~\ref{sec:supsnowballnotes}.
+
+We analyse each of the four MCAR missing-data sets and each of the four MAR data sets twice,
+first using the (standard) full Bayes machinery of 
+Section~\ref{sec:FBest} and then second using the cut model setup of Section~\ref{sec:cm}.
+This leads to four data/inference pairs of MCAR analyses and four pairs of MAR analyses. 
+There is also a single baseline Bayesian 
+analysis made with no missing data and the same observation model and priors common to all analyses. 
+%We can compare parameter estimates 
+%made with missing data with parameter estimates obtained in this baseline study.
+
+\subsubsection{Performance evaluation}
+Parameter estimates (always posterior mean unless indicated) obtained using a full Bayes analysis on the complete data can for our purpose be treated as the truth, since
+we are interested in methods which continue to recover the full-data parameter values
+and predict missing data well as the percentage of missing data becomes large. Different fitting procedures were evaluated by comparing parameter estimates and standard deviations. A method is successful (on this first criterion) if parameter estimates do not change significantly as we increase the proportion of missing data.
+We will see that the full Bayes analysis fails very badly on this score (due to model misspecification) but a cut model approach is much more reliable, out to even very
+large proportions of missing data.
+
+Our second criterion is predictive performance on withheld data. Since we generate test missing data by withholding completely random- and snowball- sampled data,
+the withheld data for performance evaluation is the missing data for the original analysis. 
+We run MCMC for each data/inference pair and use the sampled parameters to estimate parameters using the
+posterior mean for $\hat\beta$ and $\hat \rho$ and the posterior mode for $\hat{y}_{mis}$ (ie, Equations~\ref{eq:defy} and~\ref{eq:defyhat}). We report the percentage of misclassified missing observations, $\sum_i \mathbb{I}(\hat y_{mis,i}\ne y_{true,i})/q$ not equal to its true withheld value, $y_{true,i}$ say, for each data/inference pair.
+
+A good inference method should be well calibrated, that is $E(Y_{mis,i}|\hat p_{mis,i})=\hat p_{mis,i}$, so predictions have the correct level of confidence.
+The Brier score is sensitive to calibration (and other things, see \cites{sanders1963subjective, stephenson2008two}). The Brier Score $B$ is given by
+\[
+B=\frac{1}{q} \sum_{i=1}^{q}(\hat p_{mis,i}-y_{true,i})^2,
+\]
+where $\hat p_{mis,i}=\sum_{t=1}^T y^{(t)}_{mis,i}/T$ is our Monte Carlo estimate of $P(Y_{mis,i}=1|y_{obs})$ in Equation~\ref{eq:p1}, and $y_{true,i}$ is the true value of the missing (in fact withheld) data. Smaller values of $B$ indicate better-calibrated prediction.
+The misclassification rate and Brier score take values between 0 and 1. For reference, the ratio of males to females is approximately $6:4$ in these data, so ignoring network data, taking $\hat p_{mis,i}\simeq 0.6$ and simply assigning values to missing data independently at random in these proportions gives (approximately) a misclassification rate of 0.48 and a Brier score of 0.24. This procedure is actually perfectly calibrated (but lacking in resolution) so 0.24 should be thought of as a fair score.
+
+\subsection{Comparison to a model-free network-based prediction method} \label{sec:modelfree}
+Given that model-misspecification is at the root of the difference between our cut model and full Bayes analysis,
+it is of interest to see how a straightforward model-free method performs. We tried a number of methods which we do not report as they all gave poor performace. We report a K-nearest-neighbour scheme which also gives poor performance, but seemed at least a priori a sensible attempt.
+
+For each node $i=n-q+1,...,n$ with missing gender, we have covariates $X_i$.
+For each $j=1,...n-q$ corresponding to an observed node, let $D_{i,j}=|X_i-X_j|$ be the Euclidean covariate distance. 
+We took the $K$-nearest neighbours of $i$ in this covariate distance and predicted the value of $y_{mis,i}$ using 
+the majority gender in this K-nearest-neighbour set. The value of $K$ was chosen by applying the method to
+the fully observed part of the data and choosing $K$ to minimise the misclassification rate on that data.
+\section{Results}
+
+%For the imputation we select the variable gender.
+%We avoided the popularity covariate like popularity could result in biased outcomes due to using snowball sampling; more popular persons have a higher likelihood of being sampled, %influencing the missing data pattern.
+We illustrate our methods by recovering missing gender data (recall $y_i$ is this binary gender variable). We begin with a brief summary of gender marked imbalance in the data.
+Table \ref{tab:FacebookDescriptives} describes covariates across gender. Females and males are equally popular, but females have a significantly higher in-degree (Mean = 12.47, SD = 16.15), indicating they receive more messages then males (Mean = 9.45, SD = 14.54). Males were more likely in a higher study year (Mean = 2.5, SD = 1.37) compared to females (Mean = 2.24, SD = 1.19). We selected the significant variables (indegree, year of study, and day active) as predictors for the imputation.
+
+
+\begin{table}[ht]
+	\centering
+	\caption{Covariates descriptives for Males (N = 1118) and Females (N = 781)}
+	\label{tab:FacebookDescriptives}
+	\begin{tabular}{lrrrr}
+		Covariate 				& $mean_M$ (sd) & $mean_F$ (sd) & $t (df)$ 		& $p$ 	\\ \hline
+		Outdegree  				& 10.92 (23.79)	& 10.36 (18.80) &  .571 (1868.3)& .568	\\
+		Indegree  				&  9.45 (14.54) & 12.47 (16.15)	&-4.178 (1563.2)&$<$.001\\
+		Popularity 				& 20.36 (37.01)	& 22.82 (33.47)	&-1.509 (1776.4)& .131 	\\
+		Year of study			&  2.50 (1.37) 	&  2.24 (1.19) 	& 4.36 (1805.8) &$<$.001\\
+		Average characters		& 68.09 (88.16)	& 63.50 (75.72)	& 1.215 (1818.1)& .224 	\\
+		Day user became active	& 30.43 (29.22)	& 37.54 (35.99)	&-4.568 (1449)  &$<$.001\\
+		Day user contacted 75\% & 42.67 (33.74)	& 48.66 (38.21)	&-3.526 (1541.7)&$<$.001\\
+		of his/her friends		&				&				&				& 		\\ \hline
+		
+	\end{tabular}
+	\raggedright Descriptives obtained from the Facebook data used in this study, where the mean values are compared between males and females. Columns are independent-sample T-test statistics ($t$) comparing means with $p$ value $<.05$ indicating a significant effect, given a standard deviation ($sd$) and significance threshold depending on the stated degrees of freedom ($df$).
+\end{table}
+
+In Tables~\ref{tab:compareGenderRandomF0} and~\ref{tab:compareGenderEdgeCorSnowF0} we present the main results of our fitting data with random/MCAR and snowball/MAR missingness
+respectively. MCMC convergence was checked. Specimen traces, presented in the Supplement in Section~\ref{sec:mcmcoutput}, showed negligible burn-in and very good mixing. 
+Effective sample sizes, reported in Section~\ref{sec:ESS}, are all over 10000. The results in the tables are representative. We replicated the parameter estimation results 
+in two different missing-data subsets of the same size (see Supplementary Material Tables \ref{tab:replication_random}, \ref{tab:replication_snowball}) so we can be confident the results we present are representative, and not an artifact of one specific realisation of the missing data process.
+
+To sum up the results briefly, parameter estimates in Tables~\ref{tab:compareGenderRandomF0} and~\ref{tab:compareGenderEdgeCorSnowF0} are far more stable
+(that is, they match parameter values in the complete-data analysis) when we use the cut model. Parameter estimates remain approximately constant across rows of the cut model analysis (top half of each table) while they shrink towards zero as we scan across columns in the full Bayes analysis (bottom half of each table). This is what we would expect in a misspecified setting. The cut model protects parameter estimates from distortion due to model misspecification in the missing data. These improved parameter estimates then give better prediction when applied to the missing data.
+Interestingly, the key network parameter, $\rho$, is negative and significant: the residual network effect on gender, after accounting for our covariates, is anti-correlated. The significance of this effect was lost in the full Bayes analysis at high levels of missingness, but detected by the cut model. 
+
+Turning to our other criteria, the cut model has significantly smaller misclassification rate when the missingness is MCAR (Table~\ref{tab:compareGenderRandomF0}) 
+but only roughly equal misclassification rate when
+missingness is MAR (Table \ref{tab:compareGenderEdgeCorSnowF0}). The Brier scores are similar. Further investigation showed that at the highest
+levels of missingness, full Bayes is essentially predicting the missing binary gender data using the constant gender ratio, as there is little other information left in the data. 
+
+We repeated the analysis using snowball-sampling without edge-correction. This led to data with almost no informative edges. The levels of missingness are extreme, and we think network analysis is no-longer sensible. We present these results in Section~\ref{sec:snowballall}) for completeness. 
+
+
+
+\begin{sidewaystable}
+	\caption{Comparison of posterior mean parameter estimates for \textit{Gender} under a cut and full Bayes imputation model with random missingness/MCAR-sampling.}
+	\label{tab:compareGenderRandomF0}
+	\begin{center}
+		\bigskip
+		\bigskip
+		\bigskip
+		
+		\begin{tabular}{r|ccccc}
+			&
+			\begin{rotate}{60} 0\% missing \end{rotate} &
+			\begin{rotate}{60} 10\% missing \end{rotate}&
+			\begin{rotate}{60} 25\% missing \end{rotate}&
+			\begin{rotate}{60} 50\% missing \end{rotate}&
+			\begin{rotate}{60} 75\% missing \end{rotate} \\ \hline
+			Parameters 	   & 		    & CM		 	& CM	  	& CM	 	 & CM  			\\ \hline
+			Intercept 	   &-.591(.073)	&-.599(.075)&-.566(.082)	&-.564(.098)&-.461(.133)	\\
+			Indegree       & .010(.002)	& .011(.002)& .012(.002)	&-.014(.003)& .013(.004)	\\
+			Year of study 2&-.031(.079)	&-.007(.082)&-.042(.090)	&-.059(.111)&-.135(.157)	\\
+			Year of study 3&-.043(.086)	&-.021(.092)&-.095(.102)	&-.050(.124)& .048(.170)	\\
+			Year of study 4&-.087(.098)	&-.044(.103)&-.098(.111)	&-.077(.134)&-.152(.189)	\\
+			Year of study 5&-.226(.155)	&-.208(.160)&-.383(.188)	&-.373(.229)&-.393(.296)	\\
+			Year of study 6&-.754(.261)	&-.730(.270)&-1.399(.443) 	&1.235(.461)&-3.737(2.611)	\\
+			Day active 	   & .005(.001)	&-.005(.001)& .005(.001) 	& .006(.001)& .004(.002)	\\
+			$\rho$ 		   &-.507(.045)	&-.517(.050)&-.530(.059)	&-.576(.090)&-.583(.143)	\\
+			Misclassification rate & .331		& .381  	& .332 	 		& .285	 	& .220	 	 	\\
+			Brier score    &            & .267      & .255          & .262      & .264          \\ \hline
+			
+			Parameters	   & 			& FBM 	    & FBM 			& FBM  	  	& FBM 			\\ \hline
+			Intercept 	   & 			&-.579(.072)&-.426(.069)	&-.273(.066)&-.099(.064)	\\
+			Indegree       & 			& .009(.002)& .006(.002)	& .007(.002)& .003(.002)	\\
+			Year of study 2& 			& .040(.078)&-.040(.077)	&-.084(.077)&-.066(.075)	\\
+			Year of study 3& 			& .035(.086)&-.078(.085)	&-.058(.083)& .031(.081)	\\
+			Year of study 4& 			& .037(.098)&-.026(.095)	&-.039(.093)&-.095(.092)	\\
+			Year of study 5& 			&-.148(.155)&-.265(.153)	&-.405(.153)&-.075(.145)	\\
+			Year of study 6& 			&-.681(.252)&-.648(.236)	&-.696(.227)&-.455(.209)	\\
+			Day active 	   &			& .005(.001)& .005(.001)	& .004(.001)& .001(.001)	\\
+			$\rho$ 		   &			&-.416(.047)&-.323(.047)	&-.171(.047)&-.036(.046)	\\
+			Misclassification rate & 		 	& .416	  	& .399	 	 	& .418	 	& .408			\\
+			Brier score    &            & .259      & .243          & .246      & .247          \\ \hline
+		\end{tabular}
+		
+		\raggedright Estimates based on 25000 MCMC steps with burn-in 1000, flat prior for $\beta$, CM = Cut Model, FBM = Full Bayes Model and ``Bayes'' is simply the full analysis of all data. Covariate ``Year of Study'' is treated as a categorical variable with first-year baseline. misclassification rate of $0\%$ missing data is computed using leave-one-out prediction.
+	\end{center}
+\end{sidewaystable}
+
+
+\begin{sidewaystable}
+	\caption{Comparison of posterior mean parameter estimates for \textit{Gender} under a cut and full Bayes imputation model with snowball/MAR sampling based missingness, conditioned on the number of missing edges.}
+	\label{tab:compareGenderEdgeCorSnowF0}
+	\begin{center}
+		\bigskip
+		\bigskip
+		\bigskip
+		\begin{tabular}{r|ccccc}
+			&
+			\begin{rotate}{60} {0\% missing }\end{rotate} &
+			\begin{rotate}{60} {2\% missing }\end{rotate}&
+			\begin{rotate}{60} {9\% missing }\end{rotate}&
+			\begin{rotate}{60} {19\% missing }\end{rotate}&
+			\begin{rotate}{60} {38\% missing }\end{rotate} \\ \hline
+			Parameters	   & 			& CM 		 & CM	  	 & CM	 	 & CM 		  \\ \hline
+			Intercept 	   &-.591(.073)	&-.599(.073) &-.586(.073)&-.557(.076)& -.650(.088)\\
+			Indegree	   & .010(.002)	& .010(.002) & .007(.003)& .011(.004)&  .001(.006)\\
+			Year of study 2&-.031(.079)	&-.023(.079) &-.041(.082)&-.049(.086)& -.051(.098)\\
+			Year of study 3&-.043(.086)	&-.055(.088) &-.063(.091)&-.065(.094)& -.049(.109)\\
+			Year of study 4&-.087(.098)	&-.127(.098) &-.142(.101)&-.146(.106)& -.066(.121)\\
+			Year of study 5&-.226(.155)	&-.217(.157) &-.229(.158)&-.170(.171)& -.256(.189)\\
+			Year of study 6&-.754(.261)	&-.898(.284) &-.952(.287)&-.991(.312)& -.905(.3970)\\	
+			Day active 	   & .005(.001)	& .006(.001) & .005(.001)& .006(.001)&  .007(.001)\\
+			$\rho$ 		   &-.507(.045)	&-.515(.048) &-.493(.056)&-.367(.069)& -.178(.092)\\
+			misclassification rate & .331  	& .500 	     & .567	   	 & .434  	 &  .528 	  \\
+			Brier score     & 	        & .309  	 & .294	   	 & .265  	 &  .304 	  \\ \hline
+			
+			Parameters	   &        	& FBM 	     & FBM 		 & FBM 		 & FBM    	 \\ \hline
+			Intercept 	   &			&-.546(.071) &-.485(.069)&-.502(.067)&-.483(.066)\\
+			Indegree       &			& .008(.002) & .007(.002)& .009(.002)& .008(.002)\\
+			Year of study 2&			&-.002(.078) &-.050(.077)& .014(.077)&-.072(.077)\\
+			Year of study 3&			&-.027(.086) &-.092(.085)& .017(.084)&-.059(.084)\\
+			Year of study 4&			&-.111(.098) &-.184(.097)&-.098(.095)& .003(.094)\\
+			Year of study 5&			&-.214(.155) &-.199(.152)&-.030(.150)&-.137(.150)\\
+			Year of study 6&			&-.692(.249) &-.743(.247)&-.535(.229)&-.266(.214)\\		
+			Day active 	   &			& .005(.001) & .005(.001)& .005(.001)& .005(.001)\\
+			$\rho$ 		   &			&-.443(.051) &-.306(.058)&-.183(.056)&-.097(.054)\\
+			misclassification rate &			& .529	  	 & .561	 	 & .439	 	 & .511      \\
+			Brier score     & 	        & .305  	 & .283	   	 & .260  	 & .268      \\ \hline
+		\end{tabular}
+		
+		\raggedright Estimates based on 25000 draws and 1000 burn-in, m = 10, flat prior for $\beta$, CM = cut model, FBM = Full Bayes model. Percentage missing nodes do not match random/MCAR levels as percentage missing edges were matched. See Table~\protect\ref{tab:edgecomparison}
+	\end{center}
+\end{sidewaystable}
+
+%
+%
+%\subsection{Random/MCAR sampling}
+%{\color{blue}Model estimates for imputation on randomly sampled observations are presented in Table \ref{tab:compareGenderRandomF0}. Compared to the completely observed model (0\% missing), both models showed diverging parameter estimates when missingness increased, with the CMs attaining better estimates compared to the FBMs: the $\beta$s for \textit{year of study} were closer to the complete data model in the FBMs, whereas $\beta$s of \textit{indegree} and \textit{day the user became active} were closer to the null model in the CMs. Network parameter $\rho$ was estimated more stable in the CMs (see Figures \ref{fig:rhoestimatesCUTrandomF0}, whereas it dropped diverged towards zero in the FBMs in the 75\% missingness scenario \ref{fig:rhoestimatesFBMrandomF0}). This explains the higher proportion of misclassification in the FBM. Also, the bias remained relatively stable in the FBM whereas it dropped in the cut model. The accuracy of the prediction was higher in the cut model across scenario's, indicating higher accuracy when feedback was cut.
+%
+%The ratios of observations who's imputed value differed between the cut and full Bayes models were as follows: 1/185 in the 10\% scenario, 20/476 in the 25\% scenario, 35/952 in the 50\% scenario and 204 of the 1424 observations differed in their imputed values in  the 75\% scenario. Females were not more difficult to impute than males.} OK BUT NEEDS FURTHER POLISH
+
+%\subsection{Edge conditioned snowball/MAR sampling}
+%Model estimates (provided in Table \ref{tab:compareGenderEdgeCorSnowF0}) are significantly different between CM and FBM. Compared to random/MCAR-sampling, removing nodes conditional on the number of edges resulted in parameter estimates that XXX . In both CM and FBM, $\rho$ increases towards zero. In relative terms, the proportion of misclassification was highest in the 25/8.6\% missingness model, but the misclassification trend was similar between missingness scenarios. The edge conditioned snowball/MAR sampling resulted in Brier scores comparable to node conditioned snowball/MAR sampling.
+%
+%{\color{blue}{Compared to the completely observed model (0\% missing), parameter estimates diverged in both models when missingness increased and the differences between CMs and FBMs are significant. $\rho$ diverged from it's original value -.507 towards zero in both models but deteriorated faster in the FBM. For all $\beta$s, the variance increased with missingness in CMs, but remained fairly the same in FBMs. Initial bias was higher in the CM, but misclassification proportions became more similar after 10\% missingness. Accuracy of classification was again comparable between cut and full Bayes except in 75\% missingness. Except for the 50\% scenario, the cut model classified less cases correctly and was also less accurate, as indicated by higher Brier scores (e.g., 369 in cut versus .254 in full Bayes in 75\% missingness). The number of dissimilarities in the four models was as follows: 3/196 in the 10\% model, 31 of 401 cases in the 25\% model, 135 of 952 observations in the 50\% scenario, and 634/1424 in the 75\% model. Cases that were hard to impute in the cut model were also hard to impute correctly in the full Bayes, males and females alike.
+%
+%We replicated the parameter estimation results in two different missing-data subsets of the data (see Supplementary Material Tables \ref{tab:replication_random}, \ref{tab:replication_snowball}).}} NEEDS UPDATING THIS IS STILL MAINLY THE OLD TEXT
+
+The model-free comparison lead to an optimal value of $K=21$, so we assigned each missing gender value by taking the gender of the non-missing individual with most similar covariate values. We tried this approach on the random/MCAR data with 10\% missingness. The misclassification rate was 0.39, to be compared with the values 0.38 (cut) and 0.42 (Bayes) taken from Table~\ref{tab:compareGenderRandomF0}. Our KNN method could be improved, for example by weighting covariates in the distance measure. However, our purpose is to show that the although the network based parametric model is misspecified, it should not be given up entirely.  
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Discussion}
+The aim of this paper was to present a misspecification-robust imputation procedure for attributes in networked data via autocorrelation regression models. We presented a cut model, where there is no feedback from the imputed data to parameter estimation, and a full Bayes approach, where feedback exists. These models were applied to multiple scenarios with increasing missingness.
+
+When snowball/MAR sampling was used to remove the same number of observations, the amount of edges (or friendship connections) lost was significantly different, following a convincingly negative exponential distribution. We corrected this effect with edge- We have shown that model parameters are diversely affected with different types of missingness and the network element exacerbates the consequences of missing data, especially when entire clusters drop out. Notably, the combination of increased missing data and model misspecification deteriorated imputation performance. 
+%If the model was a good fit, a full Bayes procedure would only improve the analysis. This can be checked using simulated synthetic data. 
+Both methods (i.e. cut model and full Bayes) fail at prediction when the missingness falls in clusters, as in the snowball-sampled case. However cut model parameter estimates remain stable even in this case, where full Bayes estimates shrink to zero and loose significance.
+
+If there were no model misspecification (for example, if we carried out this analysis on synthetic data, with parameters sampled from the prior, and data from the observation model) then straightforward Bayesian inference will
+work. Moreover, because the cut model is discarding information in cutting feedback from
+missing data, its returns parameter estimates with greater associated variance. In this case straightforward Bayesian inference will give correctly calibrated answers with greater confidence and precision in the well-specified setting. This lower-variance aspect is already visible in Tables~\ref{tab:compareGenderRandomF0} and~\ref{tab:compareGenderEdgeCorSnowF0}, in the misspecified case,
+where we see the Bayes estimates have associated errors which are slightly, but uniformly, smaller than the corresponding cut model errors.
+
+We shortly discussed a naive model-free but network-informed alternative with a misclassification rate between the presented models. Matching procedures are less robust compared to models where stable parameters are obtained from which multiple observations can be imputed. Yet, given the quality of spectral clustering literature, the outcome of our experiment postulates machine learning alternatives become competitive with existing methods. Perhaps dimensionality reduction and clustering approaches, recently claimed to outperform multiple imputation \cite{hodge2019multiple}, can be useful in networked data, but other new methods employing ``learning rates'' (\cite{grunwald2017inconsistency}) might also be considered. One open problem in network based predictive mean matching is proper donor selection. Our proposal was to combine network structure with covariate distance, but more work is required to test different scenario's, covariates types, and network structures, specifically if small clusters exist.
+
+This study assumed fully observed tie-structure in the network. Edge weights depended on collapsing data from 196 days, which seemed a solid solution to provide an indication whether a relationship existed (compared to cross-sectional designs) but does not completely rule out that other edges may come to existence (or break) in the future. A potential misrepresentation of the network by missing edges could result in an over-or underestimation of $\rho$, depending on whether covariates diverse or converge with edges. Several studies have suggested imputation-like models to complete tie structure in networks (e.g. \cite{huisman2009imputation}), and one strategy in future studies could be to first complete the tie-structure, towards optimal estimation of $\rho$.
+
+Another issue in Bayesian imputation of categorical $y$ is unbalance, which changes the shape of the distribution of latent proxy $z$. Although $z$ is drawn from a truncated normal, its shape fully depends on the distribution of $y$. The gender variable used in this study was not severely imbalanced yet severe imbalance may lead to problems in parameter estimation if $z$ is highly skewed. non-linearity could be dealt with by applying non-linear Bayesian regression, but doing this in the context of imputation with ARMs is yet uncharted.
+
+The main conclusion from our model comparison is as follows: researchers faced with missing data are advised to use the cut model, which is likely more able to retain accurate posterior distributions, especially when the pattern of missingness correlates with network edges and with high proportions of missing data $>25\%$. Parameter estimates in the full Bayes approach suffer from model misspecification and strongly depend on the starting values given to each observation. Perhaps more study into different ways to determine starting values combined with full Bayes in missing data can make full Bayes more applicable in this context. The outcome that cut models outperform full Bayes is convenient as current imputation methods in independent observations are abundantly cut models \cite{buuren2010mice}. As mentioned, data completeness and veracity are a major issue for any analyst, especially in the cyber domain. There are numerous cases where online identities are copied, faked, or profiles use false information to misguide other users (e.g. online grooming). By applying ARM imputation, attribute data of all observations in a network can be completed by incorporating all the observed information. When attribute data is observed, the model may be useful in analyzing residuals acquired by comparing imputation output to observed data, as a form of robust anomaly detection.
+
+\bibliographystyle{amsalpha}
+\bibliography{imputationrefs}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\section{Supplementary Material}
+\beginsupplement
+
+\subsection{MCMC output traces for selected parameters}\label{sec:mcmcoutput}
+
+\begin{figure}[h]
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_cut10_flag0.jpeg}
+		\caption{10\% Missingness}
+		\vspace{4ex}
+	\end{subfigure}%%
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_cut25_flag0.jpeg}
+		\caption{25\% Missingness}
+		\vspace{4ex}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_cut50_flag0.jpeg}
+		\caption{50\% Missingness}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_cut75_flag0.jpeg}
+		\caption{75\% Missingness}
+	\end{subfigure}
+
+	\caption{Network parameter MCMC traces from the random-missingness/MCAR sampling procedure in the cut model; burn in period of 1000 draws followed by 25000 draws.}
+	\label{fig:rhoestimatesCUTrandomF0}
+\end{figure}
+
+\begin{figure}[h]
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_fbs10_flag0.jpeg}
+		\caption{10\% Missingness}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_fbs25_flag0.jpeg}
+		\caption{25\% Missingness}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_fbs50_flag0.jpeg}
+		\caption{50\% Missingness}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_fbs75_flag0.jpeg}
+		\caption{75\% Missingness}
+	\end{subfigure}
+
+	\caption{Network parameter MCMC traces from the random-missingness/MCAR sampling procedure in the full Bayes model; burn in period of 1000 draws followed by 25000 draws.}
+	\label{fig:rhoestimatesFBMrandomF0}
+\end{figure}
+
+
+\begin{figure}[h]
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_cut10_snow_flag0.jpeg}
+		\caption{10\% Missingness}
+		\vspace{4ex}
+	\end{subfigure}%%
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_cut25_snow_flag0.jpeg}
+		\caption{25\% Missingness}
+		\vspace{4ex}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_cut50_snow_flag0.jpeg}
+		\caption{50\% Missingness}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_cut75_snow_flag0.jpeg}
+		\caption{75\% Missingness}
+\end{subfigure}
+	\caption{Network parameter draws from the sampling procedure on the snowball/MAR sampled missingness, in the cut model; burn in period of 1000 draws followed by 25000 draws.}
+	\label{fig:rhoestimatesCUTsnowF0}
+\end{figure}
+
+\begin{figure}[h]
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_fbs10_snow_flag0.jpeg}
+		\caption{10\% Missingness}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_fbs25_snow_flag0.jpeg}
+		\caption{25\% Missingness}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_fbs50_snow_flag0.jpeg}
+		\caption{50\% Missingness}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_fbs75_snow_flag0.jpeg}
+		\caption{75\% Missingness}
+	\end{subfigure}
+	\caption{Network parameter draws from the sampling procedure on the snowball/MAR sampled missingness, in the full Bayes; burn in period of 1000 draws followed by 25000 draws.}
+	\label{fig:rhoestimatesFBMsnowF0}
+\end{figure}
+
+
+\begin{figure}[h]
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_cut10_edge_flag0.jpeg}
+		\caption{10\% Missingness}
+		\vspace{4ex}
+	\end{subfigure}%%
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_cut25_edge_flag0.jpeg}
+		\caption{25\% Missingness}
+		\vspace{4ex}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_cut50_edge_flag0.jpeg}
+		\caption{50\% Missingness}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_cut75_edge_flag0.jpeg}
+		\caption{75\% Missingness}
+\end{subfigure}
+	\caption{Network parameter draws from the sampling procedure on the snowball/MAR sampled missingness, matching the number of missing edges, in the cut model; burn in period of 1000 draws followed by 25000 draws..}
+	\label{fig:rhoestimatesCUTsnowF2}
+\end{figure}
+
+\begin{figure}[h]
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_fbs10_edge_flag0.jpeg}
+		\caption{10\% Missingness}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_fbs25_edge_flag0.jpeg}
+		\caption{25\% Missingness}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_fbs50_edge_flag0.jpeg}
+		\caption{50\% Missingness}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.5\linewidth}
+		\centering
+		\includegraphics[width=0.95\linewidth]{images/Rplot_fbs75_edge_flag0.jpeg}
+		\caption{75\% Missingness}
+	\end{subfigure}
+	\caption{Network parameter draws from the sampling procedure on the snowball/MAR sampled missingness, matching the number of missing edges, in full Bayes; burn in period of 1000 draws followed by 25000 draws.}
+	\label{fig:rhoestimatesFBMsnowF2}
+\end{figure}
+
+\newpage
+\subsection{Effective sample size of $\rho$ in the snowball/MAR sampling scenario.}\label{sec:ESS}
+
+In this section we give the effective sample size (ESS) for the slowest mixing parameter, $\rho$, in the worst missing-data process (Snowball, with no edge matching). 
+This is example is representative. The ESS values of the $\beta$-parameters were similar or better. To ensure robustness of parameter estimation, we used \textit{MultiESS} from the \textit{mcmcse} package to estimate the effective sample and observed (see Table \ref{tab:ESS}) that the number of missing observations influenced the effective sample size of our Markov Chain \cite{vats2015multivariate}.
+
+\begin{table}[ht]
+	\centering
+	\caption{Effective sample size of $\rho$ in the snowball/MAR sampling scenario}
+	\label{tab:ESS}
+	\begin{tabular}{lll}
+		\%missing	& Cut model	& full Bayes\\ \hline
+		10\% 		& 14607.29  & 14128.71  \\
+		25\%		& 12901.34 	& 15969.51  \\
+		50\%		& 14478.81  & 15369.77 	\\
+		75\% 		& 21550.03  & 23817.22 \\ \hline
+	\end{tabular}
+	
+	\raggedright This table presents the effective sample size estimates of network parameter $\rho$, {\color{blue}where the $\rho$ estimates from the fully observed model are compared with the $\rho$ estimates from the missing data.}
+\end{table}
+
+\subsection{Snowball sampling with edge conditioning}\label{sec:supsnowballnotes}
+
+We give some further details of the Snowball/MAR sampling scheme, and in particular the edge-matching. The use of different sampling techniques to select nodes for the imputation analyses influenced model estimation. Snowball sampling tends to remove data from well-connected actors. This leads to large numbers of missing (ie non-informative) edges. When data are missing completely at random over the network, network information is retained even at very high levels of missingness, as much as $75\%$. A straightforward application of snowball sampling (next section of supplement) at a fixed percentage missing node values leads to extreme low levels of informative edges, so that little network information remains and there is
+little point in making a network analysis. The correspondence is shown in Table~\ref{tab:edgecomparison} and in Figure~\ref{fig:edgecomparison}. In our Snowball/MAR missing data process we therefore match a fixed percentage missing edges. The data are missing in clusters in contrast to the random scatter generated by the random/MCAR missing-data process.
+
+\begin{table}
+	\centering
+	\caption{Amount of remaining edges between different sampling techniques}
+	\label{tab:edgecomparison}
+	\begin{tabular}{lrrr}
+		\%nodes missing	& random& snowball  & edge matched snowball (\%nodes) \\ \hline
+		    10\% 		& 22220 & 13708     & 23072 (1.80) \\
+		    25\%		& 15002 &  4640     & 15296 (8.60) \\
+		    50\%		& 6946  &   590     &  6944 (19.2) \\
+		    75\% 		& 1814  &    74     &  1802 (37.8) \\ \hline
+	\end{tabular}
+	\raggedright This Table gives the number of remaining edges under different sampling methods. $W$ starts complete with 27676 edges and we introduce 10, 25, 50, and 75\% missingness by removing nodes. The last column presents the amount of remaining edges if matched on edges-amount, and the percentage of missing nodes that scenario corresponds to. For example, in the 50\% nodes missing scenario, random sampling left 6946 edges, and if snowball sampling to prune a similar amount of edges, this results in 19.2\% missing nodes.
+\end{table}
+
+
+\begin{center}
+    \includegraphics[width=0.75\textwidth]{images/Rplot_edgecomparison.jpeg}
+    \captionof{figure}{This Figure shows the number of informative edges when using different sampling methods to select nodes to remove attribute data. 
+    When selecting nodes randomly, the number of edges lost drops relatively gently, while snowball sampling drops more rapidly. Beyond about 60\% node-missingness
+    the number of informative edges in snowball sampling is very small as only isolated nodes remain.}
+    \label{fig:edgecomparison}
+\end{center}
+
+\subsection{Snowball sampling without matching missing-edge counts} \label{sec:snowballall} 
+In snowball sampling with out matching missing-edges, we matched missingness levels of gender values in the MCAR setup approximately. We adjusted the number of seeds ($m=20, 44, 159, and 457$) to create four datasets with $q=196, 401, 952$, and $q=1424$ persons with a missing value in $y$. This roughly matched the percentage missing nodes (10,25,50,75)
+in the MCAR analysis.  However, since data on better-connected individuals are more likely to be removed by snowball sampling than data on individuals 
+with fewer connections, this quickly leads to a scenario with insufficient data for interesting or meaningful analysis, so in the main paper we report
+results for scenarios where we matched the number of edges with missing node data at both ends in MAR and MCAR. 
+
+Model estimates are provided in Table \ref{tab:compareGenderSnowF0}. This table can be thought of as an extension of the informative-edge-matched Table~\ref{tab:compareGenderEdgeCorSnowF0} adding columns on the right side of the table at higher levels of missingness. Both methods
+are predicting very poorly as network based inference becomes irrelevant. The cut model picks up the significant negative 
+network parameter $\rho<0$ out to the greatest levels of missingness.
+
+\begin{sidewaystable}
+	\caption{Comparison of parameter estimates for \textit{Gender} under a cut and full Bayes imputation model with snowball/MAR sampling based missingness.}
+	\label{tab:compareGenderSnowF0}
+	\begin{center}
+		\bigskip
+		\bigskip
+		\bigskip
+		
+		\begin{tabular}{r|ccccc}
+			&
+			\begin{rotate}{60} 0\% missing \end{rotate} &
+			\begin{rotate}{60} 10\% missing \end{rotate}&
+			\begin{rotate}{60} 25\% missing \end{rotate}&
+			\begin{rotate}{60} 50\% missing \end{rotate}&
+			\begin{rotate}{60} 75\% missing \end{rotate} \\ \hline
+			Parameters	   & 			& CM 		 & CM	  	 & CM	 	 & CM 		  \\ \hline
+			Intercept 	   &-.591(.073)	&-.600(.074) &-.569(.077)&-.668(.098)&-1.022(.150)\\
+			Indegree	   & .010(.002)	& .006(.003) & .009(.004)& .029(.011)&  .176(.036)\\
+			Year of study 2&-.031(.079)	&-.050(.083) &-.046(.087)&-.039(.112)&  .090(.162)\\
+			Year of study 3&-.043(.086)	&-.057(.091) &-.046(.096)&-.097(.121)&  .011(.171)\\
+			Year of study 4&-.087(.098)	&-.150(.102) &-.143(.109)&-.136(.133)& -.118(.188)\\
+			Year of study 5&-.226(.155)	&-.215(.158) &-.143(.172)&-.266(.194)& -.142(.276)\\
+			Year of study 6&-.754(.261)	&-.967(.299) &-.898(.309)&-.831(.418)&-13.585(8.140)\\	
+			Day active 	   & .005(.001)	& .005(.001) & .006(.001)& .006(.001)&  .007(.002)\\
+			$\rho$ 		   &-.507(.045)	&-.489(.058) &-.354(.073)&-.097(.117)& -.037(.206)\\
+			Misclassification rate & 	.331    & .622  	 & .484	   	 & .428  	 &  .467 	  \\
+			Brier score     & 	        & .312  	 & .268	   	 & .275  	 &  .369 	  \\ \hline
+			
+			Parameters	   &			& FBM 	     & FBM 		 & FBM 		 & FBM    	 \\ \hline
+			Intercept 	   &			&-.507(.069) &-.482(.066)&-.378(.066)&-.314(.065)\\
+			Indegree       &			& .005(.002) & .009(.002)& .010(.002)& .009(.002)\\
+			Year of study 2&			&-.047(.077) &-.045(.076)&-.004(.076)& .021(.076)\\
+			Year of study 3&			&-.016(.084) &-.009(.083)&-.100(.083)& .066(.082)\\
+			Year of study 4&			&-.150(.096) &-.145(.094)&-.131(.094)& .022(.091)\\
+			Year of study 5&			&-.184(.152) &-.057(.150)&-.207(.149)&-.126(.148)\\
+			Year of study 6&			&-.724(.246) &-.551(.227)& .015(.203)&-.492(.216)\\		
+			Day active 	   &			& .005(.001) & .005(.001)& .004(.001)& .003(.001)\\
+			$\rho$ 		   &			&-.305(.056) &-.076(.061)&-.068(.053)& .015(.049)\\
+			Misclassification rate &			& .617	  	 & .461	 	 & .441	 	 & .415      \\
+			Brier score     & 	        & .296  	 & .260	   	 & .256  	 & .254      \\ \hline
+		\end{tabular}
+		
+	    \raggedright Estimates based on 25000 draws and 1000 burn-in, flat prior for $\beta$, CM = cut model, FBM = Full Bayes model.
+		
+	\end{center}
+\end{sidewaystable}
+
+%\newpage
+%\subsection{.}
+%A naive way of replacing missing values would be to seek in the data for matches to our observation based on the observed covariates and use the value from (one of these) matches. This mimics the idea of donor selection in Predictive Mean Matching, where donors are selected based on $\hat{y}$, from which one value is adopted to replace the missing value \cite{van2012flexible}. Interested if such a crude matching procedure has merit, we tested a direct, indirect and neighbour matching procedure.
+%
+%\subsubsection{Direct matching}
+%We created groups of observations that were similar on their covariates bar gender. Ideally, every group includes either males or females so that a missing value would be easily replaced by adopting the value of a direct match. 105 groups could be created including 252 persons (Mean group size = 2.66, SD = 1.02). Of the 105 groups, 54 included both males and females, meaning direct adoption of gender from matches in the same group would be problematic in 51\% of the attempts.
+%
+%\subsubsection{Indirect matching}
+%Similar to the imputation analyses, we start with
+%$W$, a row-stochastic network weight matrix;
+%$X$, a $n \times p$ matrix including all covariate values (except gender);
+%$X_{obs}$, covariate data of persons with observed $y$;
+%$X_{mis}$, data for persons with a missing value in $y$;
+%and $q$ is the number of persons with their $y$-value (gender) removed.
+%
+%Let $D$ be the $n \times n$ Euclidean distance matrix based on $X$, from which we extracted the columns of the persons with missing $y$ value to obtain $D_{mis}$, which is $n \times q$ dimensional. Algorithm \ref{alg:indirectmatching} explains the procedure to calculate the optimal number of donors, given their distance to person $i$ with missing data. We ranked the donors (all persons except $i$) based on their distance to person $i$ and stepwise increased the number of donors (and thus the allowed distance) to calculate the Brier score (B) on every step to determine the global optimum of number of donors (given their distance) by identifying the first local B-minimum. The latter implies that in some cases there was a global minimum for B, which we observed when the BS distribution for person $i$ was not convex and only occurred if B starts $>0.5$ with 2 donors (meaning the donors with the most similar covariate values wrongly predicted gender)(see Figure \ref{fig:indirectmatchingex}). Counter-intuitively, selecting the first local minimum was more robust here.
+%
+%\begin{algorithm}
+%	\For{$i \ \text{in} \ 1:q$}{\
+%	    Let $S$ be a matrix
+%	 	\begin{equation}
+%    	\begin{bmatrix}
+%    		ID_1 & D_{i1} \\
+%    		{...} & {...} \\
+%    		ID_n & D_{in} \\
+%    	\end{bmatrix}
+%	    \end{equation}
+%	    Holding the IDs of all persons except $i$, and $D_{i1}$ is the distance estimate between person $i$ and person with ID=1. We obtained $rank(S)$ as $S$ ranked on $D$.
+%	
+%    	\For{$j \ \text{in} \ 2:(n-1)$}{\
+%        Let $d \in \{2, ..., j\}$ be the donors selected from $rank(S)$ so that $y_d$ becomes a gender vector of donors and calculate the Brier Score (B) as
+%
+%        $BS_{ij}$ = (($\sum_{1}^{j} y_d)  - y_i)^2$
+%
+%        which was stored in matrix $R$ with dimensions $q \times n-2$ (if 2 is the offset for $j$)
+%        }
+%
+%        Next, we obtained the optimal BS for every person with missing $y$,
+%
+%        $v = 0$
+%
+%        \For{$j$ \ $\text{in}$ \ $1:n-1$}{\
+%        \begin{algorithmic}
+%
+%        \IF{$v = BS_{ji}$}
+%        \STATE $v = BS_{j+1,i}$
+%        \ELSE
+%        \STATE $output[j] = v$
+%        \ENDIF
+%        \end{algorithmic}
+%
+%        }
+%    }
+%	\caption{Indirect Matching Procedure}
+%	\label{alg:indirectmatching}
+%\end{algorithm}
+%
+%\begin{figure}
+%	\centering
+%	\includegraphics[width=0.95\linewidth]{images/Rplot_example_BSmin.jpeg}
+%	\caption{Indirect Matching non-convex Brier Score example}
+%	\label{fig:indirectmatchingex}
+%\end{figure}
+%
+%The brier score distribution (see Figure \ref{fig:BSindirect}) showed 4 peaks around typical thresholds, the highest peak around 0 indicates accurate prediction, whereas the small peak around 1 resulted from a highly confident but wrongly estimated gender. The misclassification rate calculated over all observations was .392. The overall brier scores were [.221, .213, .222, .245] for the [10, 25, 50, 75]\% scenario's.
+%
+%\subsubsection{Neighbour matching}
+%The indirect matching procedure neglects network structure, so in neighbour matching a missing value is replaced by a value from direct neighbours. We use snowball/MAR sampling with multiple inclusion from the \textit{LSMI} R package and use the person with missing value $y_i$ as seed to select it's k-degrees $(k \in \{1, ..., 4\})$ neighbours resulting in $j$ donors $d$ ($k=1$ equals a star-shaped network). We looped over the data 4 times and increase $k$ on every iteration, followed by averaging the gender values from donors $y_d$ as a probability for $y = 1$, as input to the Brier Score calculation: $((\sum_{1}^{j} y_d)$  - $y_i)^2$. For every observation we selected $k$ with lowest B and observed that, when optimized for B, $k=2$ yielded the lowest B in $73-74\%$ of the cases. The brier scores were [.570, .574, .577, .580] for the 10-, 25-, 50-, and 75\% scenario's. The overall misclassification rate was .770, indicating that gender of the immediate friends is less informative compared to selecting donors from the indirect matching procedure, which is an indirect validation of the negative network parameter $\rho$.
+%
+%\begin{table}[ht]
+%	\centering
+%	\caption{Optimal depth of neighbours determined by optimizing brier scores}
+%	\label{tab:BSneigh}
+%	\begin{tabular}{lllll}
+%		neighbours      & 1	    & 2     & 3     & 4 \\ \hline
+%		10\% missing    & 34	& 137 (74\%)  & 2     & 12 \\
+%		25\% missing    & 90	& 346 (73\%)  & 6     & 34 \\
+%		50\% missing    & 185	& 694 (73\%)  & 13    & 60 \\
+%		75\% missing    & 270	& 1050 (74\%)  & 17    & 87 \\ \hline
+%	\end{tabular}
+%	
+%	\raggedright This table presents the number of times selecting first, second, third or fourth degree friends resulted in the lowest brier score. In all missingness scenario's, replacing  the missing value with the mean of the 2-degree friend (i.e.; direct friends and their friends) resulted in the lowest brier score, indicating the best possible prediction for this procedure.
+%\end{table}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Replication outcomes}
+For random/MCAR missingness and snowball/MAR sampling we replicated the parameter estimation results by using different seeds as input for the sampling methods to select which nodes had their data removed (which nodes selected for imputation).
+
+\begin{table}[ht]
+	\centering
+	\caption{Parameter estimates from replication with 10\% random missingness}
+	\label{tab:replication_random}
+        \bigskip
+		\bigskip
+		\bigskip
+		\begin{tabular}{r|cc}
+			&
+			\begin{rotate}{60} replication 1 \end{rotate} &
+			\begin{rotate}{60} replication 2 \end{rotate} \\ \hline
+			Parameters	   & CM      	& CM        \\ \hline
+			Intercept 	   &-.642(.074)	&-.567(.074) \\
+			Indegree	   & .013(.002)	& .009(.002) \\
+			Year of study 2&-.019(.084)	&-.050(.082) \\
+			Year of study 3&-.039(.091)	&-.024(.091) \\
+			Year of study 4&-.095(.104)	&-.054(.101) \\
+			Year of study 5&-.178(.162)	&-.192(.164) \\
+			Year of study 6&-.732(.264)	&-.743(.267) \\
+			Day active 	   & .006(.001)	& .005(.001) \\
+			$\rho$ 		   &-.533(.050)	&-.515(.051) \\
+			N missing      & 185        & 185        \\ \hline
+			
+			Parameters	   & FBM     	& FBM    	 \\ \hline
+			Intercept 	   &-.564(.071) &-.537(.070) \\
+			Indegree       & .012(.002) & .010(.002) \\
+			Year of study 2& .008(.077) &-.029(.078) \\
+			Year of study 3&-.001(.086) &-.030(.086) \\
+			Year of study 4&-.125(.097) &-.038(.096) \\
+			Year of study 5&-.228(.155) &-.151(.153) \\
+			Year of study 6&-.872(.265) &-.679(.247) \\		
+			Day active 	   & .005(.001) & .005(.001) \\
+			$\rho$ 		   &-.439(.045) &-.450(.046) \\
+			N missing      & 185        & 185        \\ \hline
+		\end{tabular}
+	
+	\raggedright This table presents the parameter estimates from the two replication studies where gender of 10\% of the observations was set to missing. Observations were selected via snowball/MAR sampling with a different seed. Estimates are based on 10000 draws with a burn-in period of 500. The number of missing observations fluctuates due to the initial number of seed persons for the snowball/MAR sampling.
+\end{table}
+
+
+\begin{table}[ht]
+	\centering
+	\caption{Parameter estimates from replication with different snowball/MAR sampled subsets (10\% missingness)}
+	\label{tab:replication_snowball}
+        \bigskip
+		\bigskip
+		\bigskip
+		\begin{tabular}{r|cc}
+			&
+			\begin{rotate}{60} replication 1 \end{rotate} &
+			\begin{rotate}{60} replication 2 \end{rotate} \\ \hline
+			Parameters	   & CM      	& CM        \\ \hline
+			Intercept 	   &-.593(.074)	&-.483(.074) \\
+			Indegree	   & .011(.003)	& .017(.003) \\
+			Year of study 2&-.038(.083)	&-.052(.082) \\
+			Year of study 3&-.056(.091)	&-.160(.089) \\
+			Year of study 4&-.092(.101)	&-.174(.101) \\
+			Year of study 5&-.277(.161)	&-.297(.161) \\
+			Year of study 6&-.985(.301)	&-.886(.276) \\
+			Day active 	   & .005(.001)	& .005(.001) \\
+			$\rho$ 		   &-.452(.058)	&-.483(.054) \\
+			N missing      & 234        & 178        \\ \hline
+			
+			Parameters	   & FBM     	& FBM    	 \\ \hline
+			Intercept 	   &-.505(.069) &-.390(.070) \\
+			Indegree       & .007(.002) & .011(.002) \\
+			Year of study 2& .008(.077) &-.102(.077) \\
+			Year of study 3&-.005(.085) &-.220(.087) \\
+			Year of study 4&-.074(.096) &-.216(.097) \\
+			Year of study 5&-.223(.150) &-.318(.153) \\
+			Year of study 6&-.698(.236) &-.624(.231) \\		
+			Day active 	   & .004(.001) & .005(.001) \\
+			$\rho$ 		   &-.298(.061) &-.357(.054) \\
+			N missing      & 234        & 178        \\ \hline
+		\end{tabular}
+	
+	\raggedright This table presents the parameter estimates from the two replication studies where gender of 10\% of the observations was set to missing. Observations were selected via snowball/MAR sampling with a different seed. Estimates are based on 10000 draws with a burn-in period of 500. The number of missing observations fluctuates due to the initial number of seed persons for the snowball sampling ($N = 14$ for \textit{set.seed(3030)} and $N = 20$ for \textit{set.seed(6060)}).
+\end{table}
+
+\end{document} 

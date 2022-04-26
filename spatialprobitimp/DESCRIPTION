@@ -1,0 +1,17 @@
+Package: spatialprobit
+Version: 0.9-11
+Date: 2020-02-20
+Title: Spatial Probit Models Imputation
+Author: Mark Patrick Roeling <mproeling@gmail.com> based on code from Stefan Wilhelm <wilhelm@financial.com> and Miguel Godinho de Matos <miguelgodinhomatos@cmu.edu>
+Maintainer: Mark Patrick Roeling <mproeling@gmail.com>
+Imports: stats
+Depends: R (>= 3.0.0), Matrix, spdep, mvtnorm, tmvtnorm
+Encoding: latin1
+Suggests: RUnit, testthat
+Description: Bayesian Estimation of Spatial Probit and Tobit Models.
+License: GPL (>= 2)
+URL: http://www.r-project.org
+NeedsCompilation: no
+Packaged: 2020-02-20 11:50:36 UTC; mproeling
+Repository: CRAN
+Date/Publication: 2015-09-17 14:49:32

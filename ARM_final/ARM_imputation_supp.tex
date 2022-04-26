@@ -1,0 +1,59 @@
+\documentclass{article}
+
+\usepackage{algorithmic}
+\usepackage{algorithm}
+\usepackage[algo2e]{algorithm2e} 
+\usepackage{array}
+\usepackage{afterpage}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsrefs}
+\usepackage{authblk}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{kpfonts}
+\usepackage{listings}
+\usepackage{lscape}
+\usepackage{mathtools}
+\usepackage{multicol}
+\usepackage{pgfplots}
+\usepackage{rotating} 
+\usepackage{setspace}
+\usepackage{subcaption} 
+\usepackage{titlesec}
+\usepackage{tikz}
+\usepackage{url}
+
+\usepackage[latin1]{inputenc}
+
+\makeatletter
+\newcommand{\distas}[1]{\mathbin{\overset{#1}{\kern\z@\sim}}}%
+\newsavebox{\mybox}\newsavebox{\mysim}
+\newcommand{\distras}[1]{%
+	\savebox{\mybox}{\hbox{\kern3pt$\scriptstyle#1$\kern3pt}}%
+	\savebox{\mysim}{\hbox{$\sim$}}%
+	\mathbin{\overset{#1}{\kern\z@\resizebox{\wd\mybox}{\ht\mysim}{$\sim$}}}%
+}
+\makeatother
+
+\usetikzlibrary{shapes,arrows}
+\usetikzlibrary{arrows}
+\titleformat{\chapter}[display]
+{\normalfont}{\Large\scshape\chaptertitlename\\thechapter}{0pt}{\LARGE\bfseries}
+
+\begin{document}
+
+\title{Supplementary Material: Imputation of attributes in networked data using Bayesian Autocorrelation Regression Models}
+\author[1]{Mark Patrick Roeling \thanks{mark.roeling@stats.ox.ac.uk}}
+\author[1]{Geoff Nicholls}
+\affil[1]{Department of Statistics, University of Oxford, 24-29 St Giles' OX1 3LB, United Kingdom}
+\maketitle
+	
+\doublespacing
+\newpage
+	
+%\section{Introduction}
+
+% MARK: MOVED THIS PART TO PAPER SUPPLEMENTARY (BELOW MAIN TEXT)
+
+\end{document}

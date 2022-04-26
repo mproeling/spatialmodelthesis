@@ -1,0 +1,144 @@
+
+R version 3.5.0 (2018-04-23) -- "Joy in Playing"
+Copyright (C) 2018 The R Foundation for Statistical Computing
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> rm(list = ls(all = TRUE))
+> 
+> #missing_person_id = 1 
+> missing_person_id=(commandArgs(TRUE))
+> 
+> # this script is updated by taking Year of Study as a set of dummy variables
+> library(igraph)
+
+Attaching package: 'igraph'
+
+The following objects are masked from 'package:stats':
+
+    decompose, spectrum
+
+The following object is masked from 'package:base':
+
+    union
+
+> library(spatialprobit)
+Loading required package: Matrix
+Loading required package: spdep
+Loading required package: sp
+Loading required package: spData
+To access larger datasets in this package, install the spDataLarge
+package with: `install.packages('spDataLarge',
+repos='https://nowosad.github.io/drat/', type='source'))`
+Loading required package: mvtnorm
+Loading required package: tmvtnorm
+Loading required package: stats4
+Loading required package: gmm
+Loading required package: sandwich
+> library(corrplot)
+corrplot 0.84 loaded
+> library(truncnorm)
+> library(snowboot)
+> 
+> source('D:/Documents/networks/scripts/outofsample/gibbs_zsamplingfunctions.R')
+> source('D:/Documents/networks/scripts/outofsample/sar_base.R')
+> source('D:/Documents/networks/scripts/outofsample/sar_continuous.R')
+> 
+> setwd("D:/Documents/downloads/ToreOpsahl")
+> 
+> OClinks_w = read.table("OClinks_w.txt")
+> colnames(OClinks_w) = c("id1", "id2", "messages")
+> OClinks_w_g = graph_from_edgelist(as.matrix(OClinks_w[,c(1:2)]), directed = F)
+> net = igraph_to_network(OClinks_w_g)
+> 
+> W = as(as.matrix(readMM(file='Wmatrix.01.sym.rowstochastic.txt')), "dgCMatrix") 
+> 
+> FBattributes = read.table("attributes.csv", sep = ";", h = T)
+> FBattributes$gender01 = FBattributes$gender
+> FBattributes[FBattributes$gender01 == 1, ]$gender01 <- 0 # recode gender
+> FBattributes[FBattributes$gender01 == 2, ]$gender01 <- 1 # recode gender
+> 
+> FBattributes = FBattributes[order(FBattributes$id), ] # sort on ID to match W
+> 
+> # add intercept, remove ID and send.friends (equal to outdegree) 
+> FBattributes = as.data.frame(cbind(1, FBattributes[,-c(1, which(names(FBattributes) == "send.friends"))])) 
+> colnames(FBattributes)[1] = "Intercept"
+> head(FBattributes)
+  Intercept gender yearofstudy outdegree indegree popular averageChar dayactive
+1         1      1           4        33       25      58    110.2108         1
+2         1      1           1         0        5       5      1.0000         4
+3         1      2           3       175       41     216    128.3859         1
+4         1      2           4         0        1       1      1.0000         5
+5         1      1           5         1        0       1     33.5000         6
+6         1      1           1        45       49      94    111.4530         6
+  send.day34th.friends gender01
+1                   61        0
+2                    4        0
+3                   90        1
+4                    5        1
+5                    6        0
+6                   28        0
+> 
+> # make dummy variables for Year of Study (6 years / categories, so 5 dummy variables, all 0 = year 1)
+> FBattributes$YOS1 = 0
+> FBattributes$YOS2 = 0
+> FBattributes$YOS3 = 0
+> FBattributes$YOS4 = 0
+> FBattributes$YOS5 = 0
+> 
+> FBattributes[FBattributes$yearofstudy == 2,]$YOS1 <- 1
+> FBattributes[FBattributes$yearofstudy == 3,]$YOS2 <- 1
+> FBattributes[FBattributes$yearofstudy == 4,]$YOS3 <- 1
+> FBattributes[FBattributes$yearofstudy == 5,]$YOS4 <- 1
+> FBattributes[FBattributes$yearofstudy == 6,]$YOS5 <- 1
+> 
+> ###### read in for testing Gender #####
+> X = as.matrix(FBattributes[,c(1,
++                               which(names(FBattributes) == "indegree"),
++                               which(names(FBattributes) == "YOS1"),
++                               which(names(FBattributes) == "YOS2"),
++                               which(names(FBattributes) == "YOS3"),
++                               which(names(FBattributes) == "YOS4"),
++                               which(names(FBattributes) == "YOS5"),
++                               which(names(FBattributes) == "dayactive"))])
+> 
+> y = FBattributes[,which(names(FBattributes) == "gender01")] 
+> #y[y > 3] <- 3
+> y = as.integer(y)
+> 
+> ##################################################
+> #################################################
+> 
+> beta = list(); beta[[1]] = rep(0, ncol(X)) # for 1 y variable
+> #beta = rep(0, ncol(X))
+> computeMarginalEffects=TRUE
+> showProgress=TRUE
+> 
+> prior=list(a1=1, a2=1, c=rep(0, ncol(X)), T=diag(ncol(X))*1e12, lflag = 1)
+> start=list(rho=0.39, rhosd=0.16, beta=rep(0, ncol(X)), phi=c(-Inf, 0:(max(y)-1), Inf))
+> 
+> prior2 = c()
+> prior2$novi = 1
+> 
+> yf1 = y; yf1[unique(sort(missing_person_id))] <- NA
+> 
+> #### cut model
+> source("D:/Documents/networks/scripts/outofsample/sar_imp_cut_oneout.R")
+> model = sar_combined_mcmc_imp_cut(y = yf1, x=X, W, ndraw=5000, burn.in=100, thinning=1, start = start,
++                                         prior=list(a1=1, a2=1, c=rep(0, ncol(X)), T=diag(ncol(X))*1e12, lflag = 1),
++                                         m=10, computeMarginalEffects=TRUE, showProgress=TRUE, method = c("probit"),
++                                         model = missing_person_id)
+Error in sar_combined_mcmc_imp_cut(y = yf1, x = X, W, ndraw = 5000, burn.in = 100,  : 
+  Y1 input seems to have no missing observations, add to X and run again, or use the regular function
+Execution halted
